@@ -1,0 +1,138 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Future You — 6-Month Mirror</title>
+  <link rel="stylesheet" href="styles.css" />
+  <script type="module" src="https://ajax.googleapis.com/ajax/libs/model-viewer/3.4.0/model-viewer.min.js"></script>
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">Future You</div>
+    <div class="tag">A 6-month mirror of your habits</div>
+  </header>
+
+  <main id="app">
+    <!-- Step 1: Upload selfie -->
+    <section class="step" data-step="1">
+      <h2>1. Upload a selfie</h2>
+      <p class="hint">We'll use this image to show "Current You" and two 6-month futures.</p>
+      <label class="uploader">
+        <input id="selfieInput" type="file" accept="image/*" />
+        <span>Click to choose a photo</span>
+      </label>
+      <div id="selfiePreview" class="preview hidden"></div>
+      <button id="toStep2" class="primary hidden">Next: Habits →</button>
+    </section>
+
+    <!-- Step 2: Habits -->
+    <section class="step hidden" data-step="2">
+      <h2>2. Tell us about your habits</h2>
+      <p class="hint">Manual entry for MVP. Apple Health / Fitbit integration is next.</p>
+
+      <div class="grid">
+        <label>Sleep (hrs/night)
+          <input type="number" id="sleep" min="0" max="12" step="0.5" value="6.5" />
+        </label>
+        <label>Exercise (days/week)
+          <input type="number" id="exercise" min="0" max="7" step="1" value="2" />
+        </label>
+        <label>Water (glasses/day)
+          <input type="number" id="water" min="0" max="20" step="1" value="4" />
+        </label>
+        <label>Steps/day (avg)
+          <input type="number" id="steps" min="0" max="30000" step="500" value="5000" />
+        </label>
+        <label>Diet quality (1-10)
+          <input type="number" id="diet" min="1" max="10" step="1" value="5" />
+        </label>
+        <label>Stress (1-10)
+          <input type="number" id="stress" min="1" max="10" step="1" value="6" />
+        </label>
+        <label>Smoking (cigs/day)
+          <input type="number" id="smoking" min="0" max="40" step="1" value="0" />
+        </label>
+        <label>Alcohol (drinks/week)
+          <input type="number" id="alcohol" min="0" max="40" step="1" value="3" />
+        </label>
+      </div>
+
+      <div class="actions">
+        <button id="back1" class="ghost">← Back</button>
+        <button id="predict" class="primary">See my two futures →</button>
+      </div>
+    </section>
+
+    <!-- Step 3: Results -->
+    <section class="step hidden" data-step="3">
+      <h2>3. Your two 6-month timelines</h2>
+
+      <div class="timelines">
+        <div class="timeline" id="sameCard">
+          <h3>Stay the same</h3>
+          <div class="avatar-frame" id="sameFrame">
+            <div class="avatar-loading" id="sameLoading">
+              <div class="spinner"></div>
+              <p>Generating 3D avatar…</p>
+            </div>
+            <model-viewer id="sameModel" class="avatar-model same"
+              auto-rotate camera-controls shadow-intensity="1"
+              style="display:none">
+            </model-viewer>
+            <div class="age-badge" id="sameBadge">—</div>
+          </div>
+          <div class="conditions" id="sameConditions"></div>
+          <ul class="metrics" id="sameMetrics"></ul>
+          <div class="coach">
+            <p id="sameCoach" class="coach-text">Loading coach…</p>
+            <button class="speak" data-target="sameCoach">▶ Avatar speaks</button>
+          </div>
+        </div>
+
+        <div class="timeline" id="improveCard">
+          <h3>Improve habits</h3>
+          <div class="avatar-frame" id="improveFrame">
+            <div class="avatar-loading" id="improveLoading">
+              <div class="spinner"></div>
+              <p>Generating 3D avatar…</p>
+            </div>
+            <model-viewer id="improveModel" class="avatar-model improve"
+              auto-rotate camera-controls shadow-intensity="1"
+              style="display:none">
+            </model-viewer>
+            <div class="age-badge good" id="improveBadge">—</div>
+          </div>
+          <div class="conditions" id="improveConditions"></div>
+          <ul class="metrics" id="improveMetrics"></ul>
+          <div class="coach">
+            <p id="improveCoach" class="coach-text">Loading coach…</p>
+            <button class="speak" data-target="improveCoach">▶ Avatar speaks</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="actions center">
+        <button id="restart" class="ghost">↺ Start over</button>
+      </div>
+    </section>
+  </main>
+
+  <footer class="foot">
+    <details>
+      <summary>Optional: add an API key for the GPT coach</summary>
+      <p class="hint">Without a key, we fall back to templated coaching. Key is stored only in this browser tab.</p>
+      <label>Anthropic API key
+        <input id="apiKey" type="password" placeholder="sk-ant-..." />
+      </label>
+      <button id="saveKey" class="ghost">Save for this session</button>
+      <span id="keyStatus" class="hint"></span>
+    </details>
+  </footer>
+
+  <script src="predict.js"></script>
+  <script src="coach.js"></script>
+  <script src="avatar.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
