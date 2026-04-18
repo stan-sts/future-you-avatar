@@ -1,7 +1,6 @@
 require('dotenv').config();
 const express = require('express');
 const https = require('https');
-const { OpenAI } = require('openai');
 const tencentcloud = require('tencentcloud-sdk-nodejs');
 
 const HunyuanClient = tencentcloud.hunyuan.v20230901.Client;
@@ -9,10 +8,6 @@ const HunyuanClient = tencentcloud.hunyuan.v20230901.Client;
 const app = express();
 app.use(express.json({ limit: '20mb' }));
 app.use(express.static('.'));
-
-function getOpenAI(key) {
-  return new OpenAI({ apiKey: key || process.env.OPENAI_API_KEY });
-}
 
 function getTencentClient(secretId, secretKey) {
   return new HunyuanClient({
@@ -55,21 +50,40 @@ app.get('/api/health-sync', (req, res) => {
 });
 
 app.post('/api/generate-2d', wrap(async (req, res) => {
-  const { image, prompt, openaiKey } = req.body;
+  const { image, prompt, googleKey } = req.body;
   if (!image || !prompt) return res.status(400).json({ error: 'image and prompt are required' });
 
+  const apiKey    = googleKey || process.env.GOOGLE_AI_KEY;
   const base64Data = image.replace(/^data:image\/\w+;base64,/, '');
-  const imageFile = new File([Buffer.from(base64Data, 'base64')], 'selfie.jpg', { type: 'image/jpeg' });
 
-  const response = await getOpenAI(openaiKey).images.edit({
-    model: 'gpt-image-1',
-    image: imageFile,
-    prompt,
-    n: 1,
-    size: '1024x1024',
-  });
+  const response = await fetch(
+    `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-exp-image-generation:generateContent?key=${apiKey}`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        contents: [{
+          parts: [
+            { text: prompt },
+            { inline_data: { mime_type: 'image/jpeg', data: base64Data } },
+          ],
+        }],
+        generationConfig: { responseModalities: ['IMAGE'] },
+      }),
+    }
+  );
 
-  res.json({ image: `data:image/png;base64,${response.data[0].b64_json}` });
+  if (!response.ok) {
+    const err = await response.text();
+    throw new Error(`Google AI error ${response.status}: ${err}`);
+  }
+
+  const data = await response.json();
+  const part = data.candidates?.[0]?.content?.parts?.find(p => p.inline_data);
+  if (!part) throw new Error('No image returned by Google AI');
+
+  const { mime_type, data: imgData } = part.inline_data;
+  res.json({ image: `data:${mime_type};base64,${imgData}` });
 }));
 
 app.post('/api/generate-avatar', wrap(async (req, res) => {

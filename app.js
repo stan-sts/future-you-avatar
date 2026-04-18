@@ -362,7 +362,7 @@
 
     try {
       const userKeys = {
-        openaiKey:  sessionStorage.getItem("openaiKey")  || undefined,
+        googleKey:  sessionStorage.getItem("googleKey")  || undefined,
         tencentId:  sessionStorage.getItem("tencentId")  || undefined,
         tencentKey: sessionStorage.getItem("tencentKey") || undefined,
       };
@@ -494,17 +494,17 @@
   $("#saveKeys").addEventListener("click", () => {
     const tid  = $("#tencentId").value.trim();
     const tkey = $("#tencentKey").value.trim();
-    const okey = $("#openaiKey").value.trim();
+    const gkey = $("#googleKey").value.trim();
     const akey = $("#anthropicKey").value.trim();
 
-    if (!tid && !tkey && !okey && !akey) {
-      ["tencentId", "tencentKey", "openaiKey", "anthropicKey"].forEach(k => sessionStorage.removeItem(k));
+    if (!tid && !tkey && !gkey && !akey) {
+      ["tencentId", "tencentKey", "googleKey", "anthropicKey"].forEach(k => sessionStorage.removeItem(k));
       $("#keyStatus").textContent = "Keys cleared — using defaults.";
       return;
     }
     if (tid)  { sessionStorage.setItem("tencentId",    tid);  $("#tencentId").value    = ""; }
     if (tkey) { sessionStorage.setItem("tencentKey",   tkey); $("#tencentKey").value   = ""; }
-    if (okey) { sessionStorage.setItem("openaiKey",    okey); $("#openaiKey").value    = ""; }
+    if (gkey) { sessionStorage.setItem("googleKey",    gkey); $("#googleKey").value    = ""; }
     if (akey) { sessionStorage.setItem("anthropicKey", akey); $("#anthropicKey").value = ""; }
     $("#keyStatus").textContent = "Keys saved for this session.";
   });
