@@ -4,24 +4,28 @@ const https = require('https');
 const { OpenAI } = require('openai');
 const tencentcloud = require('tencentcloud-sdk-nodejs');
 
-const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
-
 const HunyuanClient = tencentcloud.hunyuan.v20230901.Client;
 
 const app = express();
 app.use(express.json({ limit: '20mb' }));
 app.use(express.static('.'));
 
-const client = new HunyuanClient({
-  credential: {
-    secretId: process.env.TENCENT_SECRET_ID,
-    secretKey: process.env.TENCENT_SECRET_KEY,
-  },
-  region: 'ap-singapore',
-  profile: {
-    httpProfile: { endpoint: 'hunyuan.intl.tencentcloudapi.com' },
-  },
-});
+function getOpenAI(key) {
+  return new OpenAI({ apiKey: key || process.env.OPENAI_API_KEY });
+}
+
+function getTencentClient(secretId, secretKey) {
+  return new HunyuanClient({
+    credential: {
+      secretId:  secretId  || process.env.TENCENT_SECRET_ID,
+      secretKey: secretKey || process.env.TENCENT_SECRET_KEY,
+    },
+    region: 'ap-singapore',
+    profile: {
+      httpProfile: { endpoint: 'hunyuan.intl.tencentcloudapi.com' },
+    },
+  });
+}
 
 // Wraps async route handlers — removes try/catch boilerplate from every endpoint
 const wrap = fn => (req, res) =>
@@ -30,14 +34,34 @@ const wrap = fn => (req, res) =>
     res.status(500).json({ error: err.message });
   });
 
+// ── Health sync store (in-memory, one client at a time for demo) ─────────────
+let latestHealthData = null;
+
+// iOS companion app POSTs data here
+app.post('/api/health-sync', (req, res) => {
+  const { sleep, exercise, water, steps, diet, stress, smoking, alcohol } = req.body;
+  if (sleep == null || steps == null) return res.status(400).json({ error: 'Missing fields' });
+  latestHealthData = { sleep, exercise, water, steps, diet, stress, smoking, alcohol, ts: Date.now() };
+  console.log('Health sync received:', latestHealthData);
+  res.json({ ok: true });
+});
+
+// Web app polls here after clicking "Connect"
+app.get('/api/health-sync', (req, res) => {
+  if (!latestHealthData) return res.json({ data: null });
+  // Only serve data that arrived in the last 60 seconds (fresh sync)
+  const age = Date.now() - latestHealthData.ts;
+  res.json({ data: age < 60_000 ? latestHealthData : null });
+});
+
 app.post('/api/generate-2d', wrap(async (req, res) => {
-  const { image, prompt } = req.body;
+  const { image, prompt, openaiKey } = req.body;
   if (!image || !prompt) return res.status(400).json({ error: 'image and prompt are required' });
 
   const base64Data = image.replace(/^data:image\/\w+;base64,/, '');
   const imageFile = new File([Buffer.from(base64Data, 'base64')], 'selfie.jpg', { type: 'image/jpeg' });
 
-  const response = await openai.images.edit({
+  const response = await getOpenAI(openaiKey).images.edit({
     model: 'gpt-image-1',
     image: imageFile,
     prompt,
@@ -49,17 +73,17 @@ app.post('/api/generate-2d', wrap(async (req, res) => {
 }));
 
 app.post('/api/generate-avatar', wrap(async (req, res) => {
-  const { image, prompt } = req.body;
+  const { image, tencentId, tencentKey } = req.body;
   if (!image) return res.status(400).json({ error: 'image is required' });
 
   const base64 = image.replace(/^data:image\/\w+;base64,/, '');
-  const result = await client.request('SubmitHunyuanTo3DProJob', { ImageBase64: base64 });
+  const result = await getTencentClient(tencentId, tencentKey).request('SubmitHunyuanTo3DProJob', { ImageBase64: base64 });
   console.log('Submitted image-to-3D job:', result.JobId);
   res.json({ jobId: result.JobId });
 }));
 
 app.get('/api/avatar-status/:jobId', wrap(async (req, res) => {
-  const raw = await client.request('QueryHunyuanTo3DProJob', { JobId: req.params.jobId });
+  const raw = await getTencentClient().request('QueryHunyuanTo3DProJob', { JobId: req.params.jobId });
   console.log('Raw response:', JSON.stringify(raw));
 
   const rawStatus = (raw.Status || raw.status || '').toLowerCase();
