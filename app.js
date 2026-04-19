@@ -94,6 +94,23 @@
     }
   }
 
+  function animateSliderTo(cfg, target, duration = 900) {
+    const input = document.getElementById(cfg.id);
+    if (!input) return;
+    const start = Number(input.value);
+    const startTime = performance.now();
+    const step = (now) => {
+      const t = Math.min((now - startTime) / duration, 1);
+      const ease = t < 0.5 ? 2*t*t : -1+(4-2*t)*t;
+      const val = start + (target - start) * ease;
+      const snapped = Math.round(val / Number(input.step)) * Number(input.step);
+      updateSlider(cfg, snapped, false);
+      if (t < 1) requestAnimationFrame(step);
+      else updateSlider(cfg, target, true);
+    };
+    requestAnimationFrame(step);
+  }
+
   function initSliders() {
     HABITS.forEach(cfg => {
       const input = document.getElementById(cfg.id);
@@ -332,24 +349,7 @@
     });
   });
 
-  function animateSliderTo(cfg, target, duration = 900) {
-    const input = document.getElementById(cfg.id);
-    if (!input) return;
-    const start = Number(input.value);
-    const startTime = performance.now();
-    const step = (now) => {
-      const t = Math.min((now - startTime) / duration, 1);
-      const ease = t < 0.5 ? 2*t*t : -1+(4-2*t)*t;
-      const val = start + (target - start) * ease;
-      const snapped = Math.round(val / Number(input.step)) * Number(input.step);
-      updateSlider(cfg, snapped, false);
-      if (t < 1) requestAnimationFrame(step);
-      else updateSlider(cfg, target, true);
-    };
-    requestAnimationFrame(step);
-  }
-
-  $("#connectWatch").addEventListener("click", () => {
+$("#connectWatch").addEventListener("click", () => {
     const btn = $("#connectWatch");
     btn.textContent = "Waiting for iPhone…";
     btn.classList.add("loading");
@@ -401,16 +401,6 @@
     state.syncedHealth = { source, syncedAt, raw: data };
     $("#watchSynced").innerHTML =
       `<span class="sync-dot"></span> Synced from ${source}${historyCount ? ` · ${historyCount} daily records` : ""} · ${time}`;
-
-    const today = syncedTodayDay();
-    if (today) {
-      setTodayInputs({
-        sleep: round1(today.sleep),
-        activeEnergy: Math.round(today.activeEnergy),
-        steps: Math.round(today.steps),
-        heartRate: today.heartRateAvailable ? Math.round(today.heartRate) : null,
-      });
-    }
 
     HABITS.forEach((cfg, i) => {
       const val = data[cfg.id] ?? Number(document.getElementById(cfg.id)?.value ?? 0);
@@ -940,29 +930,22 @@
     };
   }
 
+  async function call2D(prompt, userKeys) {
+    const res = await fetch("/api/generate-2d", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ image: state.selfieDataUrl, prompt, ...userKeys }),
+    });
+    if (!res.ok) throw new Error(`2D generation failed: ${res.status}`);
+    return (await res.json()).image;
+  }
+
   async function generateScenarioAvatar(kind) {
     const cfg = AVATAR_SCENARIOS[kind];
     const goalInfo = { kgToLose: Math.max(0, state.goals.currentWeight - state.goals.targetWeight) };
     const userKeys = avatarUserKeys();
+    const ruleBasedPrompt = Predictor.scenarioAvatarPrompt(state.habits, goalInfo, cfg.scenario, state.goalHabits);
 
-    // Try K2 Think for a richer prompt; fall back to rule-based if it fails
-    let prompt;
-    try {
-      const k2Res = await fetch("/api/generate-prompt", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          habits: state.habits,
-          goalHabits: state.goalHabits,
-          scenario: cfg.scenario,
-          goalInfo,
-        }),
-      });
-      if (!k2Res.ok) throw new Error(`K2 ${k2Res.status}`);
-      ({ prompt } = await k2Res.json());
-    } catch {
-      prompt = Predictor.scenarioAvatarPrompt(state.habits, goalInfo, cfg.scenario, state.goalHabits);
-    }
     const loadingEl = document.getElementById(cfg.loadingId);
     const loadTextEl = document.getElementById(cfg.loadingTextId);
     const modelEl = document.getElementById(cfg.modelId);
@@ -973,13 +956,28 @@
     try {
       if (loadTextEl) loadTextEl.textContent = cfg.loadingLabel;
 
-      const res2d = await fetch("/api/generate-2d", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ image: state.selfieDataUrl, prompt, ...userKeys }),
-      });
-      if (!res2d.ok) throw new Error(`2D generation failed: ${res2d.status}`);
-      ({ image: modifiedImage } = await res2d.json());
+      // Get K2 prompt, fall back to rule-based if K2 API fails
+      let prompt = ruleBasedPrompt;
+      try {
+        const k2Res = await fetch("/api/generate-prompt", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ habits: state.habits, goalHabits: state.goalHabits, scenario: cfg.scenario, goalInfo }),
+        });
+        if (k2Res.ok) ({ prompt } = await k2Res.json());
+      } catch { /* keep ruleBasedPrompt */ }
+
+      // Try 2D with K2 prompt; if Gemini rejects it, retry with rule-based fallback
+      try {
+        modifiedImage = await call2D(prompt, userKeys);
+      } catch (e) {
+        if (prompt !== ruleBasedPrompt) {
+          console.warn("K2 prompt rejected by Gemini, retrying with rule-based prompt:", e.message);
+          modifiedImage = await call2D(ruleBasedPrompt, userKeys);
+        } else {
+          throw e;
+        }
+      }
 
       // Store 2D image for toggle
       if (img2dEl) img2dEl.src = modifiedImage;

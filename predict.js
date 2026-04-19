@@ -113,18 +113,18 @@
 
     // "improve" scenario: describe appearance after living with the user's own goal habits
     const improvements = [];
-    if (goalInfo.kgToLose > 10) improvements.push('visibly leaner face, defined cheekbones, sharper jawline');
-    else if (goalInfo.kgToLose > 3) improvements.push('slightly leaner face, more defined jawline');
-    if (goals.sleep >= 7.5) improvements.push('no dark circles whatsoever, no under-eye bags, bright wide-awake eyes, well-rested glow');
-    if (goals.water >= 7) improvements.push('deeply hydrated skin, plump radiant complexion, natural luminosity');
-    if (goals.stress <= 5) improvements.push('smooth relaxed forehead, no tension lines, calm serene expression');
-    if (goals.smoking === 0 && habits.smoking > 0) improvements.push('clear even skin tone, no dullness or yellowing, healthier complexion');
-    if (goals.alcohol <= 3 && habits.alcohol > 3) improvements.push('no facial redness, no puffiness, clean defined features');
-    if (goals.exercise >= 4) improvements.push('healthy active glow, energetic vibrant look, fit appearance');
-    if (goals.diet >= 7) improvements.push('clear bright skin, even healthy colour, smooth texture');
+    if (goalInfo.kgToLose > 10) improvements.push('visibly leaner face, strikingly defined cheekbones, sharp jawline, noticeably slimmer facial structure');
+    else if (goalInfo.kgToLose > 3) improvements.push('clearly leaner face, noticeably more defined jawline and cheekbones');
+    if (goals.sleep >= 7.5) improvements.push('zero dark circles, no under-eye bags whatsoever, strikingly bright and wide-awake eyes, deeply rested luminous glow around the eyes');
+    if (goals.water >= 7) improvements.push('visibly deeply hydrated skin, plump bouncy complexion, healthy natural luminosity, skin looks dewy and full of life');
+    if (goals.stress <= 5) improvements.push('completely smooth forehead, no tension lines, relaxed open confident expression, calm radiant energy');
+    if (goals.smoking === 0 && habits.smoking > 0) improvements.push('dramatically clearer even skin tone, no dullness, no yellowing, noticeably healthier fresher complexion');
+    if (goals.alcohol <= 3 && habits.alcohol > 3) improvements.push('no facial redness or puffiness, clean sculpted features, noticeably reduced bloating');
+    if (goals.exercise >= 4) improvements.push('vibrant healthy athletic glow, energetic alive look, noticeably more toned and fit appearance, natural rosy flush');
+    if (goals.diet >= 7) improvements.push('visibly clearer brighter skin, even healthy colour throughout, smooth refined texture');
 
-    const desc = improvements.length ? improvements.join(', ') : 'glowing luminous skin, bright captivating eyes, radiant well-rested look';
-    return `${base}. This person looks: ${desc}, a more vibrant version of themselves — confident glow, well-rested energy — as if they have been living by their health goals for 6 months. ${camera}`;
+    const desc = improvements.length ? improvements.join(', ') : 'striking luminous glowing skin, bright captivating eyes, radiant well-rested energetic look';
+    return `${base}. This person looks noticeably healthier and more attractive than in the reference photo: ${desc}. The improvement must be clearly visible and striking — like a real before-and-after transformation — while still looking like the same real person, not retouched or fake. ${camera}`;
   }
 
   global.Predictor = { predictBoth, healthScore, calculateWeightPlan, scenarioAvatarPrompt, idealHabits };

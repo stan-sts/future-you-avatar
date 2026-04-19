@@ -67,38 +67,52 @@ function buildK2MetaPrompt(habits, goalHabits, scenario, goalInfo) {
     `${h.steps} steps/day, diet ${h.diet}/10, stress ${h.stress}/10, ` +
     `smoking ${h.smoking} cigs/day, alcohol ${h.alcohol} drinks/week`;
 
-  const PREFIX = 'DSLR photograph of the exact same real person from the reference photo — identical clothing, identical body, full body head to toe, standing confidently on a plain white background.';
+  const PREFIX = 'DSLR photograph of the exact same real person from the reference photo — identical clothing, identical body, full body head to toe, standing confidently on a plain white background';
   const SUFFIX = 'High-end beauty photography, shot on Canon EOS R5, 85mm f/1.4, soft studio lighting. Skin looks real with natural texture, not plastic. NO illustration, NO anime, NO cartoon, NO painting, NO 3D render, NO CGI, NO digital art.';
 
   if (scenario === 'same') {
-    return `You are an expert photorealistic portrait prompt engineer for AI image generation.
+    return `You are an expert photorealistic portrait prompt engineer for AI image generation. Your job is to write a single image generation prompt — nothing else.
 
-Generate a prompt describing a person after 6 months of maintaining their CURRENT habits unchanged.
+Here is an example of the exact format and style required:
+
+EXAMPLE INPUT: sleep 5h/night, exercise 1 days/week, water 3 glasses/day, 4000 steps/day, diet 4/10, stress 8/10, smoking 0 cigs/day, alcohol 5 drinks/week. Weight context: wants to lose 4 kg but has not changed habits.
+EXAMPLE OUTPUT: ${PREFIX}. This person looks like the realistic outcome of keeping mostly the same habits for 6 months: face still looks slightly fuller with only minimal jaw definition, mild dark circles, faint under-eye puffiness, slightly tired eyes, skin looks a little dry and less luminous, subtle tension in the forehead and expression, a touch of facial puffiness or redness. Keep the person recognizable and real, not glamorized, not idealized, not harshly unhealthy, just plausibly a slightly more fatigued or unchanged version of the same person. ${SUFFIX}
+
+Now generate a prompt for this person:
 
 Current habits: ${fmt(habits)}
 Weight context: ${goalInfo.kgToLose > 0 ? `person wants to lose ${goalInfo.kgToLose} kg but has not changed habits` : 'maintaining weight'}
 
 Rules:
-- Start with exactly: "${PREFIX}"
-- Describe realistic appearance after 6 months of these habits. Low sleep → dark circles. High stress → tension lines. Low water → dry skin. Smoking → dull skin. High alcohol → puffiness. Low exercise → less vitality. Be specific and realistic, not harsh.
-- End with exactly: "${SUFFIX}"
-- Return ONLY the prompt, no explanation, no markdown.`;
+- Use the exact same sentence structure and style as the example output above
+- Start with: "${PREFIX}."
+- Describe realistic appearance after 6 months of THESE specific habits (low sleep → dark circles/puffiness, high stress → tension lines, low water → dry dull skin, smoking → dull skin, high alcohol → facial puffiness, low exercise → less vitality, low diet → uneven texture)
+- End with: "${SUFFIX}"
+- Return ONLY the prompt text, no preamble, no explanation, no markdown`;
   }
 
   const goalsDesc = goalHabits ? fmt(goalHabits) : 'optimal healthy habits';
-  return `You are an expert photorealistic portrait prompt engineer for AI image generation.
+  return `You are an expert photorealistic portrait prompt engineer for AI image generation. Your job is to write a single image generation prompt — nothing else.
 
-Generate a prompt describing a person after 6 months of achieving their GOAL habits.
+The goal is a realistic but CLEARLY VISIBLE before-and-after transformation. The improvement must be striking and noticeable — like a genuine 6-month health glow-up — while still looking like the same real person, not retouched or fake.
+
+Here is an example of the exact format and style required:
+
+EXAMPLE INPUT: Current habits: sleep 5h/night, exercise 1 days/week, water 3 glasses/day, 4000 steps/day, diet 4/10, stress 8/10. Goal habits: sleep 8h/night, exercise 5 days/week, water 8 glasses/day, 10000 steps/day, diet 8/10, stress 3/10. Weight goal: lose 4 kg.
+EXAMPLE OUTPUT: ${PREFIX}. This person looks noticeably healthier and more attractive than before: clearly leaner face, strikingly more defined jawline and cheekbones, zero dark circles, strikingly bright wide-awake eyes with a deeply rested luminous glow, visibly deeply hydrated plump bouncy skin with natural dewy luminosity, completely smooth forehead with no tension lines, calm radiant confident expression, vibrant healthy athletic glow with natural rosy flush, visibly clearer brighter even skin throughout. The improvement is clearly visible and striking — like a real before-and-after transformation — while still looking like the same real person. ${SUFFIX}
+
+Now generate a prompt for this person:
 
 Current habits: ${fmt(habits)}
 Goal habits: ${goalsDesc}
 Weight goal: ${goalInfo.kgToLose > 0 ? `lose ${goalInfo.kgToLose} kg` : 'maintain weight'}
 
 Rules:
-- Start with exactly: "${PREFIX}"
-- Describe realistic positive appearance changes from achieving the goal habits. Better sleep → bright eyes, no dark circles. More water → hydrated glowing skin. Lower stress → relaxed expression. More exercise → healthy glow. Better diet → even skin tone. Weight loss → leaner face. Be specific.
-- End with exactly: "${SUFFIX}"
-- Return ONLY the prompt, no explanation, no markdown.`;
+- Use the exact same sentence structure and style as the example output above
+- Start with: "${PREFIX}."
+- Be SPECIFIC and VIVID about each visible change from the goal habits — use strong descriptive words (strikingly, visibly, noticeably, zero, completely). Good sleep → zero dark circles, strikingly bright eyes. High water → visibly plump dewy glowing skin. Low stress → completely smooth forehead, radiant expression. Exercise → healthy vibrant athletic glow. Good diet → clear even bright skin. Weight loss → strikingly leaner face and sharper jaw.
+- End with: "The improvement is clearly visible and striking — like a real before-and-after transformation — while still looking like the same real person. ${SUFFIX}"
+- Return ONLY the prompt text, no preamble, no explanation, no markdown`;
 }
 
 app.post('/api/generate-prompt', wrap(async (req, res) => {
@@ -127,9 +141,11 @@ app.post('/api/generate-prompt', wrap(async (req, res) => {
   }
 
   const data = await response.json();
-  const prompt = data.choices?.[0]?.message?.content?.trim();
+  let raw = data.choices?.[0]?.message?.content?.trim() || '';
+  // Strip <think>...</think> reasoning blocks that K2 Think emits before the answer
+  const prompt = raw.replace(/<think>[\s\S]*?<\/think>/gi, '').trim();
   if (!prompt) throw new Error('No prompt returned by K2 Think');
-  console.log(`K2 prompt (${scenario}):`, prompt.slice(0, 120) + '…');
+  console.log(`K2 prompt (${scenario}):`, prompt.slice(0, 150) + '…');
   res.json({ prompt });
 }));
 
@@ -165,7 +181,11 @@ app.post('/api/generate-2d', wrap(async (req, res) => {
   const data = await response.json();
   const parts = data.candidates?.[0]?.content?.parts ?? [];
   const part  = parts.find(p => p.inlineData) || parts.find(p => p.inline_data);
-  if (!part) throw new Error('No image returned by Google AI');
+  if (!part) {
+    const textPart = parts.find(p => p.text);
+    console.error('Google AI returned no image. Finish reason:', data.candidates?.[0]?.finishReason, '| Text:', textPart?.text?.slice(0, 200));
+    throw new Error('No image returned by Google AI');
+  }
 
   const blob      = part.inlineData || part.inline_data;
   const mimeType  = blob.mimeType  || blob.mime_type;
