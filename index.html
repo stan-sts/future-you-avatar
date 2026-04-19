@@ -54,8 +54,8 @@
       </button>
       <button class="step-tab" data-step-target="2" type="button">
         <div class="step-n">02 <span>Planner</span></div>
-        <div class="step-title">Habit Model</div>
-        <div class="step-status">Set signals and weight goals</div>
+        <div class="step-title">Current Baseline</div>
+        <div class="step-status">Set your real starting point</div>
       </button>
       <button class="step-tab" data-step-target="3" type="button">
         <div class="step-n">03 <span>Output</span></div>
@@ -90,8 +90,8 @@
       <section class="step hidden" data-step="2">
         <div class="section-head">
           <div class="num">02</div>
-          <h2>Habit Inputs &amp; Goal Calibration</h2>
-          <div class="meta">Planner / wearable sync / targets</div>
+          <h2>Current Baseline &amp; Goal</h2>
+          <div class="meta">Real data / wearable sync / target outcome</div>
         </div>
         <div class="step-panel">
           <div class="watch-banner" id="watchBanner">
@@ -111,8 +111,8 @@
 
           <div class="input-grid">
             <section class="subsection">
-              <div class="section-label">Current habits</div>
-              <p class="subsection-intro">Tune the values manually or let Apple Health overwrite them with recent activity.</p>
+              <div class="section-label">Current baseline</div>
+              <p class="subsection-intro">This page is only for your real starting point. Tune the values manually or let Apple Health overwrite them with your actual recent activity.</p>
               <div class="habit-sliders" id="habitSliders">
                 <div class="habit-row" data-id="sleep">
                   <div class="habit-meta">
@@ -214,7 +214,7 @@
 
             <section class="subsection goals-section">
               <div class="section-label">Your goals</div>
-              <p class="subsection-intro">Set the body target and timeframe you want the model to optimize toward.</p>
+              <p class="subsection-intro">Set the outcome you want. Your ideal future will be generated automatically from science-backed health targets plus the goal below.</p>
 
               <div class="weight-goal">
                 <div class="weight-pair">
@@ -251,6 +251,41 @@
               </div>
             </section>
           </div>
+
+          <section class="subsection today-inputs-panel">
+            <div class="section-label">Today's progress</div>
+            <p class="subsection-intro">Apple Health fills these automatically when available. If today&rsquo;s data does not come through, enter it here so the results page can still show your live progress.</p>
+            <div class="today-inputs-grid">
+              <label class="today-input-card">
+                <span class="today-input-label">Sleep</span>
+                <div class="today-input-wrap">
+                  <input id="todaySleep" type="number" min="0" max="16" step="0.1" placeholder="7.5" />
+                  <span class="today-input-unit">hrs</span>
+                </div>
+              </label>
+              <label class="today-input-card">
+                <span class="today-input-label">Active energy</span>
+                <div class="today-input-wrap">
+                  <input id="todayActiveEnergy" type="number" min="0" max="3000" step="10" placeholder="320" />
+                  <span class="today-input-unit">kcal</span>
+                </div>
+              </label>
+              <label class="today-input-card">
+                <span class="today-input-label">Steps</span>
+                <div class="today-input-wrap">
+                  <input id="todaySteps" type="number" min="0" max="50000" step="100" placeholder="8200" />
+                  <span class="today-input-unit">steps</span>
+                </div>
+              </label>
+              <label class="today-input-card">
+                <span class="today-input-label">Heart rate</span>
+                <div class="today-input-wrap">
+                  <input id="todayHeartRate" type="number" min="20" max="220" step="1" placeholder="68" />
+                  <span class="today-input-unit">bpm</span>
+                </div>
+              </label>
+            </div>
+          </section>
         </div>
       </section>
 
@@ -264,20 +299,47 @@
           <p class="hint" id="futureSubtitle">In 6 months, here&rsquo;s what you can achieve:</p>
 
           <div class="future-layout">
-            <div class="future-avatar-col">
-              <div class="avatar-frame" id="futureFrame">
-                <div class="avatar-loading" id="futureLoading">
-                  <div class="spinner"></div>
-                  <p id="futureLoadingText">Generating 2D face…</p>
+            <div class="future-compare-grid">
+              <div class="future-avatar-col">
+                <div class="future-avatar-head">
+                  <div class="section-label">Projection A</div>
+                  <h3 class="future-avatar-title">Your Current Self In 6 Months</h3>
                 </div>
-                <model-viewer id="futureModel" class="avatar-model improve"
-                  auto-rotate camera-controls shadow-intensity="1"
-                  style="display:none">
-                </model-viewer>
+                <div class="avatar-frame" id="sameFutureFrame">
+                  <div class="avatar-loading" id="sameFutureLoading">
+                    <div class="spinner"></div>
+                    <p id="sameFutureLoadingText">Generating current-path face…</p>
+                  </div>
+                  <model-viewer id="sameFutureModel" class="avatar-model same"
+                    auto-rotate camera-controls shadow-intensity="1"
+                    style="display:none">
+                  </model-viewer>
+                </div>
+                <div class="coach">
+                  <p id="sameFutureCoach" class="coach-text">Loading coach…</p>
+                  <button class="speak" data-target="sameFutureCoach" data-scenario="same" data-model="sameFutureModel" type="button">Avatar Speaks</button>
+                </div>
               </div>
-              <div class="coach">
-                <p id="futureCoach" class="coach-text">Loading coach…</p>
-                <button class="speak" data-target="futureCoach" type="button">Avatar Speaks</button>
+
+              <div class="future-avatar-col">
+                <div class="future-avatar-head">
+                  <div class="section-label">Projection B</div>
+                  <h3 class="future-avatar-title">Your Ideal Self In 6 Months</h3>
+                </div>
+                <div class="avatar-frame" id="idealFutureFrame">
+                  <div class="avatar-loading" id="idealFutureLoading">
+                    <div class="spinner"></div>
+                    <p id="idealFutureLoadingText">Generating ideal future face…</p>
+                  </div>
+                  <model-viewer id="idealFutureModel" class="avatar-model improve"
+                    auto-rotate camera-controls shadow-intensity="1"
+                    style="display:none">
+                  </model-viewer>
+                </div>
+                <div class="coach">
+                  <p id="idealFutureCoach" class="coach-text">Loading coach…</p>
+                  <button class="speak" data-target="idealFutureCoach" data-scenario="improve" data-model="idealFutureModel" type="button">Avatar Speaks</button>
+                </div>
               </div>
             </div>
 

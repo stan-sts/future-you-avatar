@@ -1,6 +1,7 @@
 require('dotenv').config();
 const express = require('express');
 const https = require('https');
+const os = require('os');
 const tencentcloud = require('tencentcloud-sdk-nodejs');
 
 const HunyuanClient = tencentcloud.hunyuan.v20230901.Client;
@@ -34,7 +35,7 @@ let latestHealthData = null;
 
 // iOS companion app POSTs data here
 app.post('/api/health-sync', (req, res) => {
-  const { sleep, exercise, water, steps, diet, stress, smoking, alcohol, history } = req.body;
+  const { sleep, exercise, water, steps, diet, stress, smoking, alcohol, heartRate, history } = req.body;
   if (sleep == null || steps == null) return res.status(400).json({ error: 'Missing fields' });
   latestHealthData = {
     sleep,
@@ -45,6 +46,7 @@ app.post('/api/health-sync', (req, res) => {
     stress,
     smoking,
     alcohol,
+    heartRate: heartRate ?? null,
     history: history || null,
     ts: Date.now(),
   };
@@ -55,9 +57,7 @@ app.post('/api/health-sync', (req, res) => {
 // Web app polls here after clicking "Connect"
 app.get('/api/health-sync', (req, res) => {
   if (!latestHealthData) return res.json({ data: null });
-  // Only serve data that arrived in the last 60 seconds (fresh sync)
-  const age = Date.now() - latestHealthData.ts;
-  res.json({ data: age < 60_000 ? latestHealthData : null });
+  res.json({ data: latestHealthData });
 });
 
 app.post('/api/generate-2d', wrap(async (req, res) => {
@@ -152,4 +152,14 @@ app.get('/api/proxy-model', (req, res) => {
 });
 
 const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => console.log(`http://localhost:${PORT}`));
+app.listen(PORT, () => {
+  console.log(`http://localhost:${PORT}`);
+
+  const interfaces = os.networkInterfaces();
+  const urls = Object.values(interfaces)
+    .flat()
+    .filter(details => details && details.family === 'IPv4' && !details.internal)
+    .map(details => `http://${details.address}:${PORT}`);
+
+  urls.forEach(url => console.log(url));
+});

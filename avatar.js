@@ -51,7 +51,7 @@
 
   function stop() {
     speechSynthesis.cancel();
-    document.querySelectorAll(".avatar-img.speaking")
+    document.querySelectorAll(".avatar-model.speaking, .avatar-img.speaking")
       .forEach(el => el.classList.remove("speaking"));
   }
 

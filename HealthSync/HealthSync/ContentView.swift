@@ -9,10 +9,19 @@ struct ContentView: View {
     @State private var lastData: HealthPayload?
     @State private var showURLEditor = false
 
+    private var isUsingLocalhostOnDevice: Bool {
+        #if targetEnvironment(simulator)
+        return false
+        #else
+        return serverURL.contains("localhost") || serverURL.contains("127.0.0.1")
+        #endif
+    }
+
     var body: some View {
         NavigationStack {
             VStack(spacing: 32) {
                 header
+                if isUsingLocalhostOnDevice { deviceURLWarning }
                 if let d = lastData { dataPreview(d) }
                 syncButton
                 serverRow
@@ -73,16 +82,34 @@ struct ContentView: View {
         }
     }
 
+    var deviceURLWarning: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("Use your Mac's LAN address on a real iPhone")
+                .font(.headline)
+            Text("`localhost` points to the phone itself. Replace it with your Mac's local IP, for example `http://192.168.1.23:3030`.")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(14)
+        .background(.yellow.opacity(0.14), in: RoundedRectangle(cornerRadius: 14))
+        .overlay(
+            RoundedRectangle(cornerRadius: 14)
+                .stroke(.yellow.opacity(0.45), lineWidth: 1)
+        )
+    }
+
     func dataPreview(_ d: HealthPayload) -> some View {
         VStack(alignment: .leading, spacing: 10) {
             Text("Last synced")
                 .font(.caption).foregroundStyle(.secondary)
             Grid(alignment: .leading, horizontalSpacing: 16, verticalSpacing: 8) {
-                row("😴 Sleep",    "\(d.sleep, specifier: "%.1f") hrs")
+                row("😴 Sleep",    "\(String(format: "%.1f", d.sleep)) hrs")
                 row("👟 Steps",    "\(Int(d.steps).formatted()) / day")
-                row("🏃 Exercise", "\(d.exercise, specifier: "%.0f") days/wk")
-                row("💧 Water",    "\(d.water, specifier: "%.0f") glasses")
-                row("🧘 Stress",   "\(d.stress, specifier: "%.0f") / 10")
+                row("🏃 Exercise", "\(String(format: "%.0f", d.exercise)) days/wk")
+                row("💧 Water",    "\(String(format: "%.0f", d.water)) glasses")
+                row("❤️ Heart",    "\(String(format: "%.0f", d.heartRate)) bpm")
+                row("🧘 Stress",   "\(String(format: "%.0f", d.stress)) / 10")
             }
         }
         .padding(14)
@@ -121,6 +148,7 @@ struct ContentView: View {
                 water:    max(0, min(20, w)),
                 steps:    max(0, min(30000, s)),
                 diet:     5,   // no direct HealthKit equivalent
+                heartRate: max(0, h),
                 stress:   stressProxy,
                 smoking:  0,
                 alcohol:  0,
@@ -158,6 +186,7 @@ struct HealthPayload: Codable {
     var water: Double
     var steps: Double
     var diet: Double
+    var heartRate: Double
     var stress: Double
     var smoking: Double
     var alcohol: Double
@@ -210,6 +239,9 @@ struct URLEditorView: View {
                 .textInputAutocapitalization(.never)
                 .autocorrectionDisabled()
                 .textFieldStyle(.roundedBorder)
+            Text("On a real iPhone, use your Mac's local network IP and keep the Node server running on port 3030.")
+                .font(.caption)
+                .foregroundStyle(.secondary)
             Button("Done") { dismiss() }
                 .buttonStyle(.borderedProminent)
         }

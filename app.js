@@ -11,8 +11,28 @@
   const $ = (sel) => document.querySelector(sel);
   const steps = document.querySelectorAll(".step");
   const stepTabs = document.querySelectorAll(".step-tab");
-  const SPINNER_HTML = '<div class="spinner"></div><p id="futureLoadingText">Generating 2D face…</p>';
   const HEALTH_GOALS = { sleep: 8, activeEnergy: 300, steps: 10000 };
+  const HEART_RATE_BAND = { low: 50, high: 90 };
+  const AVATAR_SCENARIOS = {
+    same: {
+      loadingId: "sameFutureLoading",
+      loadingTextId: "sameFutureLoadingText",
+      modelId: "sameFutureModel",
+      coachId: "sameFutureCoach",
+      scenario: "same",
+      loadingLabel: "Generating current-path face…",
+      previewLabel: "2D current-path preview ready — building 3D…",
+    },
+    improve: {
+      loadingId: "idealFutureLoading",
+      loadingTextId: "idealFutureLoadingText",
+      modelId: "idealFutureModel",
+      coachId: "idealFutureCoach",
+      scenario: "improve",
+      loadingLabel: "Generating ideal future face…",
+      previewLabel: "2D ideal-future preview ready — building 3D…",
+    },
+  };
 
   // ── Habit slider config ──────────────────────────────────────────────────────
   const HABITS = [
@@ -70,6 +90,10 @@
     return Math.round(Number(value || 0) * 10) / 10;
   }
 
+  function spinnerMarkup(textId, label) {
+    return `<div class="spinner"></div><p id="${textId}">${label}</p>`;
+  }
+
   function isoDate(date) {
     return new Date(date.getTime() - date.getTimezoneOffset() * 60000).toISOString().slice(0, 10);
   }
@@ -87,51 +111,21 @@
     const sleep = Number(day?.sleep ?? 0);
     const steps = Number(day?.steps ?? 0);
     const activeEnergy = Number(day?.activeEnergy ?? 0);
+    const rawHeartRate = day?.heartRate;
+    const heartRate = rawHeartRate == null || rawHeartRate === "" ? null : Number(rawHeartRate);
     const workoutMetGoal = day?.workoutMetGoal != null ? Boolean(day.workoutMetGoal) : activeEnergy >= HEALTH_GOALS.activeEnergy;
     return {
       date,
       sleep,
       steps,
       activeEnergy,
+      heartRate,
+      heartRateAvailable: heartRate != null && Number.isFinite(heartRate),
       workoutMetGoal,
       sleepMetGoal: sleep >= HEALTH_GOALS.sleep,
       stepsMetGoal: steps >= HEALTH_GOALS.steps,
       ...formatShortDate(date),
     };
-  }
-
-  function estimatedHistoryFromHabits(habits) {
-    const profile = habits || readHabits();
-    const now = new Date();
-    const sleepOffsets = [-0.9, -0.2, 0.4, -0.5, 0.2, 0.6, -0.1];
-    const stepOffsets = [-2300, 800, -1200, 1500, -700, 1900, 400];
-    const workoutQuota = Math.max(0, Math.min(7, Math.round(profile.exercise || 0)));
-    const workoutDays = new Set();
-
-    if (workoutQuota > 0) {
-      for (let i = 0; i < workoutQuota; i++) {
-        workoutDays.add(Math.round((i * 6) / Math.max(workoutQuota - 1, 1)));
-      }
-    }
-
-    return Array.from({ length: 7 }, (_, index) => {
-      const date = new Date(now);
-      date.setDate(now.getDate() - (6 - index));
-
-      const sleep = Math.max(4.5, Math.min(10, round1((profile.sleep || 0) + sleepOffsets[index])));
-      const steps = Math.max(1500, Math.round((profile.steps || 0) + stepOffsets[index]));
-      const activeEnergy = workoutDays.has(index)
-        ? Math.max(HEALTH_GOALS.activeEnergy + 40, Math.round(220 + (profile.exercise || 0) * 35))
-        : Math.max(40, Math.round(90 + index * 15));
-
-      return normalizeHistoryDay({
-        date: isoDate(date),
-        sleep,
-        steps,
-        activeEnergy,
-        workoutMetGoal: activeEnergy >= HEALTH_GOALS.activeEnergy,
-      }, isoDate(date));
-    });
   }
 
   function syncedHistoryDays() {
@@ -170,6 +164,138 @@
     return new Date(timestamp).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
   }
 
+  function parseOptionalNumber(value) {
+    if (value == null) return null;
+    const trimmed = String(value).trim();
+    if (!trimmed) return null;
+    const num = Number(trimmed);
+    return Number.isFinite(num) ? num : null;
+  }
+
+  function readTodayInputs() {
+    return {
+      sleep: parseOptionalNumber($("#todaySleep")?.value),
+      activeEnergy: parseOptionalNumber($("#todayActiveEnergy")?.value),
+      steps: parseOptionalNumber($("#todaySteps")?.value),
+      heartRate: parseOptionalNumber($("#todayHeartRate")?.value),
+    };
+  }
+
+  function setTodayInputs(values = {}) {
+    const fieldMap = {
+      sleep: "todaySleep",
+      activeEnergy: "todayActiveEnergy",
+      steps: "todaySteps",
+      heartRate: "todayHeartRate",
+    };
+
+    Object.entries(fieldMap).forEach(([key, id]) => {
+      const input = document.getElementById(id);
+      if (!input) return;
+      const nextValue = values[key];
+      input.value = nextValue == null ? "" : String(nextValue);
+    });
+  }
+
+  function syncedTodayDay() {
+    const todayKey = isoDate(new Date());
+    const days = syncedHistoryDays();
+    const latest = days[days.length - 1];
+    if (!latest || latest.date !== todayKey) return null;
+    return latest;
+  }
+
+  function todayMetricSourceLabel(source) {
+    return source === "apple_health" ? "Apple Health" : source === "manual" ? "Manual entry" : "Waiting";
+  }
+
+  function heartRateDetail(metric) {
+    if (metric.value == null) return "Add a manual bpm value or sync Apple Health.";
+    if (metric.value < HEART_RATE_BAND.low) return `Below the ${HEART_RATE_BAND.low}-${HEART_RATE_BAND.high} bpm recovery band.`;
+    if (metric.value <= HEART_RATE_BAND.high) return `Inside the ${HEART_RATE_BAND.low}-${HEART_RATE_BAND.high} bpm recovery band.`;
+    return `Above the ${HEART_RATE_BAND.low}-${HEART_RATE_BAND.high} bpm recovery band.`;
+  }
+
+  function heartRateChip(metric) {
+    if (metric.value == null) return { label: "awaiting heart rate", tone: "neutral" };
+    if (metric.value < HEART_RATE_BAND.low) return { label: "below band", tone: "warn" };
+    if (metric.value <= HEART_RATE_BAND.high) return { label: "steady pulse", tone: "met" };
+    return { label: "elevated pulse", tone: "warn" };
+  }
+
+  function clamp01(value) {
+    return Math.max(0, Math.min(1, value));
+  }
+
+  function dailyGoalMetricRows(today) {
+    const heartMid = (HEART_RATE_BAND.low + HEART_RATE_BAND.high) / 2;
+    const heartHalfRange = (HEART_RATE_BAND.high - HEART_RATE_BAND.low) / 2;
+    const rows = [
+      {
+        label: "Sleep",
+        source: today.sleep.source,
+        valueText: today.sleep.value == null ? "Awaiting" : `${round1(today.sleep.value)}h`,
+        ratio: today.sleep.value == null ? null : clamp01(today.sleep.value / HEALTH_GOALS.sleep),
+      },
+      {
+        label: "Move",
+        source: today.activeEnergy.source,
+        valueText: today.activeEnergy.value == null ? "Awaiting" : `${Math.round(today.activeEnergy.value)} kcal`,
+        ratio: today.activeEnergy.value == null ? null : clamp01(today.activeEnergy.value / HEALTH_GOALS.activeEnergy),
+      },
+      {
+        label: "Steps",
+        source: today.steps.source,
+        valueText: today.steps.value == null ? "Awaiting" : `${Math.round(today.steps.value).toLocaleString()}`,
+        ratio: today.steps.value == null ? null : clamp01(today.steps.value / HEALTH_GOALS.steps),
+      },
+      {
+        label: "Heart",
+        source: today.heartRate.source,
+        valueText: today.heartRate.value == null ? "Awaiting" : `${Math.round(today.heartRate.value)} bpm`,
+        ratio: today.heartRate.value == null ? null : clamp01(1 - Math.abs(today.heartRate.value - heartMid) / heartHalfRange),
+      },
+    ];
+
+    const available = rows.filter(row => row.ratio != null);
+    const overall = available.length
+      ? Math.round((available.reduce((sum, row) => sum + row.ratio, 0) / available.length) * 100)
+      : null;
+
+    return { rows, availableCount: available.length, overall };
+  }
+
+  function buildTodayProgressModel() {
+    const syncedDay = syncedTodayDay();
+    const manual = readTodayInputs();
+    const pickMetric = (key) => {
+      if (syncedDay) {
+        if (key !== "heartRate" || syncedDay.heartRateAvailable) {
+          return { value: syncedDay[key], source: "apple_health" };
+        }
+      }
+      if (manual[key] != null) {
+        return { value: manual[key], source: "manual" };
+      }
+      return { value: null, source: "missing" };
+    };
+
+    const sleep = pickMetric("sleep");
+    const activeEnergy = pickMetric("activeEnergy");
+    const steps = pickMetric("steps");
+    const heartRate = pickMetric("heartRate");
+    const hasAny = [sleep, activeEnergy, steps, heartRate].some(metric => metric.value != null);
+
+    return {
+      hasAny,
+      syncedTodayAvailable: Boolean(syncedDay),
+      sleep,
+      activeEnergy,
+      steps,
+      heartRate,
+    };
+  }
+
   // ── Timeframe buttons ────────────────────────────────────────────────────────
   document.querySelectorAll(".tf-btn").forEach(btn => {
     btn.addEventListener("click", () => {
@@ -177,45 +303,6 @@
       btn.classList.add("active");
     });
   });
-
-  // ── Apple Watch simulation ───────────────────────────────────────────────────
-  function simulateWatchData() {
-    const rnd = (base, spread, step = 1) => {
-      const raw = base + (Math.random() - 0.5) * spread * 2;
-      return Math.round(raw / step) * step;
-    };
-    const now = new Date();
-    const history = [];
-
-    for (let offset = 6; offset >= 0; offset--) {
-      const date = new Date(now);
-      date.setDate(now.getDate() - offset);
-      const sleep = Math.max(5, Math.min(9, rnd(7.2, 1.1, 0.1)));
-      const steps = Math.max(3500, Math.min(14000, rnd(8300, 2600, 100)));
-      const activeEnergy = Math.max(80, Math.min(620, rnd(330, 180, 10)));
-      history.push({
-        date: date.toISOString().slice(0, 10),
-        sleep,
-        steps,
-        activeEnergy,
-        workoutMetGoal: activeEnergy >= HEALTH_GOALS.activeEnergy,
-      });
-    }
-
-    const latest = history[history.length - 1];
-    const workoutDays = history.filter(day => day.workoutMetGoal).length;
-    return {
-      sleep:    latest.sleep,
-      exercise: workoutDays,
-      water:    Math.max(3,    Math.min(10,    rnd(6,   2,   1))),
-      steps:    latest.steps,
-      diet:     Math.max(4,    Math.min(8,     rnd(6,   1,   1))),
-      stress:   Math.max(3,    Math.min(7,     rnd(5,   1,   1))),
-      smoking:  0,
-      alcohol:  Math.max(0,    Math.min(5,     rnd(2,   1,   1))),
-      history:  { days: history },
-    };
-  }
 
   function animateSliderTo(cfg, target, duration = 900) {
     const input = document.getElementById(cfg.id);
@@ -263,7 +350,13 @@
         setTimeout(poll, 2000);
       } else {
         resolved = true;
-        applyHealthData(simulateWatchData(), "simulated");
+        btn.textContent = "Retry Sync";
+        btn.classList.remove("loading", "done");
+        $("#watchSynced").innerHTML =
+          '<span class="sync-dot off"></span> No Apple Health history received yet. Open <b>HealthSync</b> on your iPhone and sync again.';
+        if (state.goals && state.prediction) {
+          renderProgressBars();
+        }
       }
     };
     poll();
@@ -280,6 +373,16 @@
     state.syncedHealth = { source, syncedAt, raw: data };
     $("#watchSynced").innerHTML =
       `<span class="sync-dot"></span> Synced from ${source}${historyCount ? ` · ${historyCount} daily records` : ""} · ${time}`;
+
+    const today = syncedTodayDay();
+    if (today) {
+      setTodayInputs({
+        sleep: round1(today.sleep),
+        activeEnergy: Math.round(today.activeEnergy),
+        steps: Math.round(today.steps),
+        heartRate: today.heartRateAvailable ? Math.round(today.heartRate) : null,
+      });
+    }
 
     HABITS.forEach((cfg, i) => {
       const val = data[cfg.id] ?? Number(document.getElementById(cfg.id)?.value ?? 0);
@@ -371,8 +474,8 @@
     showStep(3);
     renderFutureResults();
     await Promise.all([
-      generateFutureAvatar(),
-      populateFutureCoach(),
+      generateComparisonAvatars(),
+      populateFutureCoaches(),
     ]);
   });
 
@@ -395,7 +498,7 @@
   function renderFutureResults() {
     const { months } = state.goals;
     const label = months === 3 ? "3 months" : months === 12 ? "1 year" : "6 months";
-    $("#futureSubtitle").textContent = `In ${label}, here's what you can achieve:`;
+    $("#futureSubtitle").textContent = `In ${label}, compare your likely current-path self with your evidence-based ideal self.`;
     renderScienceCard();
     renderProgressBars();
   }
@@ -403,16 +506,32 @@
   function renderScienceCard() {
     const wp  = state.weightPlan;
     const el  = $("#scienceCard");
-    const proj = state.prediction.improve;
+    const currentPath = state.prediction.same;
+    const idealPath = state.prediction.improve;
 
     if (!wp) {
       el.innerHTML = `
-        <div class="science-title">Your Health Outlook</div>
-        <div class="science-goal">With consistent habits, your health score can reach <b>${proj.score}/100</b></div>
-        <div class="science-rows">
-          <div class="science-row"><span class="science-icon">⚡</span><span>Energy: <b>${proj.energy}/100</b></span></div>
-          <div class="science-row"><span class="science-icon">😴</span><span>Sleep quality: <b>${proj.sleepQuality}/100</b></span></div>
-          <div class="science-row"><span class="science-icon">✨</span><span>Skin health: <b>${proj.skinHealth}/100</b></span></div>
+        <div class="science-title">Six-Month Comparison</div>
+        <div class="science-goal">Two plausible futures from the same face scan: your current self in 6 months versus your ideal self in 6 months.</div>
+        <div class="science-compare-grid">
+          <article class="science-compare-card">
+            <div class="science-compare-label">Current self path</div>
+            <div class="science-compare-score">${currentPath.score}<span>/100</span></div>
+            <div class="science-rows">
+              <div class="science-row"><span class="science-icon">⚡</span><span>Energy <b>${currentPath.energy}/100</b></span></div>
+              <div class="science-row"><span class="science-icon">😴</span><span>Sleep quality <b>${currentPath.sleepQuality}/100</b></span></div>
+              <div class="science-row"><span class="science-icon">✨</span><span>Skin health <b>${currentPath.skinHealth}/100</b></span></div>
+            </div>
+          </article>
+          <article class="science-compare-card accent">
+            <div class="science-compare-label">Ideal self path</div>
+            <div class="science-compare-score">${idealPath.score}<span>/100</span></div>
+            <div class="science-rows">
+              <div class="science-row"><span class="science-icon">⚡</span><span>Energy <b>${idealPath.energy}/100</b></span></div>
+              <div class="science-row"><span class="science-icon">😴</span><span>Sleep quality <b>${idealPath.sleepQuality}/100</b></span></div>
+              <div class="science-row"><span class="science-icon">✨</span><span>Skin health <b>${idealPath.skinHealth}/100</b></span></div>
+            </div>
+          </article>
         </div>
       `;
       return;
@@ -428,7 +547,27 @@
 
     el.innerHTML = `
       <div class="science-title">Your ${wp.months}-Month Plan</div>
-      <div class="science-goal">Lose <b>${wp.kgToLose} kg</b> in <b>${wp.months} months</b></div>
+      <div class="science-goal">Lose <b>${wp.kgToLose} kg</b> in <b>${wp.months} months</b>, while comparing your likely current-path self against an ideal self following evidence-based health targets.</div>
+      <div class="science-compare-grid">
+        <article class="science-compare-card">
+          <div class="science-compare-label">Current self path</div>
+          <div class="science-compare-score">${currentPath.score}<span>/100</span></div>
+          <div class="science-rows">
+            <div class="science-row"><span class="science-icon">⚡</span><span>Energy <b>${currentPath.energy}/100</b></span></div>
+            <div class="science-row"><span class="science-icon">😴</span><span>Sleep <b>${currentPath.sleepQuality}/100</b></span></div>
+            <div class="science-row"><span class="science-icon">⏳</span><span>Age shift <b>${currentPath.ageShift} yrs</b></span></div>
+          </div>
+        </article>
+        <article class="science-compare-card accent">
+          <div class="science-compare-label">Ideal self path</div>
+          <div class="science-compare-score">${idealPath.score}<span>/100</span></div>
+          <div class="science-rows">
+            <div class="science-row"><span class="science-icon">⚡</span><span>Energy <b>${idealPath.energy}/100</b></span></div>
+            <div class="science-row"><span class="science-icon">😴</span><span>Sleep <b>${idealPath.sleepQuality}/100</b></span></div>
+            <div class="science-row"><span class="science-icon">⏳</span><span>Age shift <b>${idealPath.ageShift} yrs</b></span></div>
+          </div>
+        </article>
+      </div>
       <div class="science-rows">
         <div class="science-row">
           <span class="science-icon">🔥</span>
@@ -456,9 +595,16 @@
   }
 
   function buildEvidenceModel() {
-    const observedDays = syncedHistoryDays();
-    const observed = observedDays.length >= 3;
-    const days = observed ? observedDays : estimatedHistoryFromHabits(state.habits);
+    const days = syncedHistoryDays();
+    if (!days.length) {
+      return {
+        mode: "missing",
+        source: "Awaiting Apple Health",
+        lastSync: state.syncedHealth ? lastSyncLabel(state.syncedHealth.syncedAt) : "Not synced yet",
+        dayCount: 0,
+      };
+    }
+
     const today = days[days.length - 1];
     const sleepAvg = averageOf(days, "sleep");
     const workoutHits = countHits(days, "workoutMetGoal");
@@ -466,9 +612,10 @@
     const stepAvg = averageOf(days, "steps");
 
     return {
-      mode: observed ? "observed" : "estimated",
-      source: observed ? (state.syncedHealth?.source || "Apple Health") : "Planner estimate",
-      lastSync: observed ? lastSyncLabel(state.syncedHealth?.syncedAt) : "Connect Apple Health",
+      mode: "observed",
+      source: state.syncedHealth?.source || "Apple Health",
+      lastSync: lastSyncLabel(state.syncedHealth?.syncedAt),
+      dayCount: days.length,
       days,
       today,
       sleepAvg,
@@ -497,12 +644,112 @@
       : `${Math.round(day.steps).toLocaleString()} / ${HEALTH_GOALS.steps.toLocaleString()}`;
   }
 
+  function renderTodayProgress(today) {
+    const dailyGoal = dailyGoalMetricRows(today);
+    const sleepChip = today.sleep.value == null
+      ? { label: "awaiting sleep", tone: "neutral" }
+      : today.sleep.value >= HEALTH_GOALS.sleep
+        ? { label: "goal cleared", tone: "met" }
+        : { label: sleepDeltaText({ sleep: today.sleep.value }), tone: "miss" };
+    const activeChip = today.activeEnergy.value == null
+      ? { label: "awaiting move", tone: "neutral" }
+      : today.activeEnergy.value >= HEALTH_GOALS.activeEnergy
+        ? { label: "workout counted", tone: "met" }
+        : { label: `${Math.round(today.activeEnergy.value)} / ${HEALTH_GOALS.activeEnergy} kcal`, tone: "miss" };
+    const stepChip = today.steps.value == null
+      ? { label: "awaiting steps", tone: "neutral" }
+      : today.steps.value >= HEALTH_GOALS.steps
+        ? { label: "goal cleared", tone: "met" }
+        : { label: `${Math.round(today.steps.value).toLocaleString()} / ${HEALTH_GOALS.steps.toLocaleString()}`, tone: "neutral" };
+    const bpmChip = heartRateChip(today.heartRate);
+
+    const card = (label, valueText, detail, chip, source) => `
+      <article class="today-progress-card">
+        <div class="today-progress-label">${label}</div>
+        <div class="today-progress-value">${valueText}</div>
+        <div class="today-progress-detail">${detail}</div>
+        <div class="today-progress-foot">
+          <span class="metric-chip ${chip.tone}">${chip.label}</span>
+          <span class="today-progress-source">${todayMetricSourceLabel(source)}</span>
+        </div>
+      </article>
+    `;
+
+    return `
+      <section class="today-progress-board">
+        <div class="today-progress-head">
+          <div>
+            <div class="progress-kicker">Today&rsquo;s Progress</div>
+            <h3 class="today-progress-title">Live Daily Signals</h3>
+            <p class="progress-subhead">This block mixes Apple Health and manual fallback input so you can still track today even if the watch sync is missing a field. The goal-match bars update every day to show how close today is to your ideal path.</p>
+          </div>
+        </div>
+        <div class="goal-match-board">
+          <div class="goal-match-head">
+            <div>
+              <div class="goal-match-label">Today vs Ideal Path</div>
+              <div class="goal-match-score">${dailyGoal.overall == null ? "Awaiting data" : `${dailyGoal.overall}% match`}</div>
+            </div>
+            <div class="goal-match-meta">${dailyGoal.availableCount}/4 signals available today</div>
+          </div>
+          <div class="goal-match-bars">
+            ${dailyGoal.rows.map(row => `
+              <div class="goal-match-row">
+                <div class="goal-match-copy">
+                  <span class="goal-match-name">${row.label}</span>
+                  <span class="goal-match-value">${row.valueText}</span>
+                </div>
+                <div class="goal-match-track">
+                  <div class="goal-match-fill ${row.ratio == null ? "empty" : row.ratio >= 0.8 ? "strong" : row.ratio >= 0.55 ? "mid" : "weak"}" style="width:${row.ratio == null ? 0 : Math.round(row.ratio * 100)}%"></div>
+                </div>
+                <div class="goal-match-side">
+                  <span class="goal-match-percent">${row.ratio == null ? "—" : `${Math.round(row.ratio * 100)}%`}</span>
+                  <span class="goal-match-source">${todayMetricSourceLabel(row.source)}</span>
+                </div>
+              </div>
+            `).join("")}
+          </div>
+        </div>
+        <div class="today-progress-grid">
+          ${card(
+            "Sleep",
+            today.sleep.value == null ? "Awaiting" : `${round1(today.sleep.value)}h`,
+            `Target ${HEALTH_GOALS.sleep}h nightly`,
+            sleepChip,
+            today.sleep.source
+          )}
+          ${card(
+            "Active Energy",
+            today.activeEnergy.value == null ? "Awaiting" : `${Math.round(today.activeEnergy.value)} kcal`,
+            `Move goal ${HEALTH_GOALS.activeEnergy} kcal`,
+            activeChip,
+            today.activeEnergy.source
+          )}
+          ${card(
+            "Steps",
+            today.steps.value == null ? "Awaiting" : `${Math.round(today.steps.value).toLocaleString()}`,
+            `Target ${HEALTH_GOALS.steps.toLocaleString()} steps`,
+            stepChip,
+            today.steps.source
+          )}
+          ${card(
+            "Heart Rate",
+            today.heartRate.value == null ? "Awaiting" : `${Math.round(today.heartRate.value)} bpm`,
+            heartRateDetail(today.heartRate),
+            bpmChip,
+            today.heartRate.source
+          )}
+        </div>
+      </section>
+    `;
+  }
+
   function streakCardMarkup(label, streak, hits, summary, note, days, key, valueFormatter) {
     return `
       <article class="streak-card">
         <div class="streak-card-label">${label}</div>
         <div class="streak-card-value">${streak ? `${streak}-day streak` : "No streak yet"}</div>
-        <div class="streak-card-meta">${hits} / 7 days hit goal · ${summary}</div>
+        <div class="streak-card-meta">${hits} / ${days.length} days hit goal · ${summary}</div>
         <div class="streak-mini-track">
           ${days.map((day, index) => `
             <div class="streak-day ${day[key] ? "met" : "miss"} ${index === days.length - 1 ? "today" : ""}">
@@ -518,14 +765,47 @@
 
   function renderProgressBars() {
     const evidence = buildEvidenceModel();
+    const today = buildTodayProgressModel();
     const weightLine = state.goals.currentWeight > state.goals.targetWeight
       ? `Weight target still needs ${round1(state.goals.currentWeight - state.goals.targetWeight)} kg of progress across ${state.goals.months} months.`
       : `Weight target is set for maintenance over ${state.goals.months} months.`;
     const modeCopy = evidence.mode === "observed"
-      ? "Observed from Apple Health. A day only counts when the watch data clears the target."
-      : "Using modeled days from the current sliders until Apple Health sends daily history.";
+      ? "Observed from Apple Health. A day only counts when the synced watch data clears the target."
+      : "This board now stays empty until real Apple Health history is synced, so streaks are never inferred from sliders.";
+
+    if (evidence.mode === "missing") {
+      $("#progressBars").innerHTML = `
+        ${today.hasAny ? renderTodayProgress(today) : ""}
+        <section class="progress-ledger">
+          <div class="progress-ledger-top">
+            <div>
+              <div class="progress-kicker">Goal Evidence / Awaiting Sync</div>
+              <h3 class="progress-headline">Recovery + Workout Ledger</h3>
+              <p class="progress-subhead">${modeCopy} ${weightLine}</p>
+            </div>
+            <div class="progress-meta">
+              <span class="progress-mode">${evidence.source}</span>
+              <span class="progress-mode">Sleep clears unavailable</span>
+              <span class="progress-mode">Workout clears unavailable</span>
+              <span class="progress-mode">Sync ${evidence.lastSync}</span>
+            </div>
+          </div>
+
+          <div class="progress-empty">
+            <div class="progress-empty-title">No synced Apple Health history yet</div>
+            <p class="progress-empty-copy">Open the <b>HealthSync</b> iPhone app, point it at this server, and sync your last 7 days. Once those records arrive, this section will show real streaks, real daily sleep, real active energy, real steps, and heart-rate-aware daily progress.</p>
+          </div>
+
+          <div class="ledger-footnote">
+            Streak scoring is disabled until actual Apple Health days are received.
+          </div>
+        </section>
+      `;
+      return;
+    }
 
     $("#progressBars").innerHTML = `
+      ${renderTodayProgress(today)}
       <section class="progress-ledger">
         <div class="progress-ledger-top">
           <div>
@@ -535,8 +815,8 @@
           </div>
           <div class="progress-meta">
             <span class="progress-mode ${evidence.mode === "observed" ? "live" : ""}">${evidence.source}</span>
-            <span class="progress-mode">${evidence.sleepHits}/7 sleep clears</span>
-            <span class="progress-mode">${evidence.workoutHits}/7 workout clears</span>
+            <span class="progress-mode">${evidence.sleepHits}/${evidence.dayCount} sleep clears</span>
+            <span class="progress-mode">${evidence.workoutHits}/${evidence.dayCount} workout clears</span>
             <span class="progress-mode">Avg ${Math.round(evidence.stepAvg).toLocaleString()} steps</span>
             <span class="progress-mode">Sync ${evidence.lastSync}</span>
           </div>
@@ -547,7 +827,7 @@
             "Sleep goal",
             evidence.sleepStreak,
             evidence.sleepHits,
-            `avg ${round1(evidence.sleepAvg)}h vs ${HEALTH_GOALS.sleep}h target`,
+            `avg ${round1(evidence.sleepAvg)}h vs ${HEALTH_GOALS.sleep}h target across ${evidence.dayCount} synced days`,
             evidence.today.sleepMetGoal
               ? `Today logged ${round1(evidence.today.sleep)}h and kept the recovery streak alive.`
               : `Today logged ${round1(evidence.today.sleep)}h, ${sleepDeltaText(evidence.today)}.`,
@@ -559,7 +839,7 @@
             "Workout goal",
             evidence.workoutStreak,
             evidence.workoutHits,
-            `avg ${Math.round(averageOf(evidence.days, "activeEnergy"))} kcal active`,
+            `avg ${Math.round(averageOf(evidence.days, "activeEnergy"))} kcal active across ${evidence.dayCount} synced days`,
             evidence.today.workoutMetGoal
               ? `Today crossed the ${HEALTH_GOALS.activeEnergy} kcal movement threshold.`
               : `Today stayed below the ${HEALTH_GOALS.activeEnergy} kcal workout threshold.`,
@@ -600,30 +880,32 @@
         </div>
 
         <div class="ledger-footnote">
-          ${evidence.mode === "observed"
-            ? "Apple Health currently feeds last-night sleep, daily steps, and active energy into this board."
-            : "Connect the companion app to replace estimated days with actual Apple Watch history for real streak scoring."}
+          Apple Health currently feeds last-night sleep, daily steps, active energy, and heart rate into today&rsquo;s progress. The 7-day ledger remains based on synced sleep, movement, and steps.
         </div>
       </section>
     `;
   }
 
   // ── Two-step avatar generation ───────────────────────────────────────────────
-  async function generateFutureAvatar() {
-    const prompt = Predictor.goalAvatarPrompt(state.habits, {
-      kgToLose: Math.max(0, state.goals.currentWeight - state.goals.targetWeight),
-    });
+  function avatarUserKeys() {
+    return {
+      googleKey:  sessionStorage.getItem("googleKey")  || undefined,
+      tencentId:  sessionStorage.getItem("tencentId")  || undefined,
+      tencentKey: sessionStorage.getItem("tencentKey") || undefined,
+    };
+  }
+
+  async function generateScenarioAvatar(kind) {
+    const cfg = AVATAR_SCENARIOS[kind];
+    const goalInfo = { kgToLose: Math.max(0, state.goals.currentWeight - state.goals.targetWeight) };
+    const prompt = Predictor.scenarioAvatarPrompt(state.habits, goalInfo, cfg.scenario);
+    const userKeys = avatarUserKeys();
+    const loadingEl = document.getElementById(cfg.loadingId);
+    const loadTextEl = document.getElementById(cfg.loadingTextId);
+    const modelEl = document.getElementById(cfg.modelId);
 
     try {
-      const userKeys = {
-        googleKey:  sessionStorage.getItem("googleKey")  || undefined,
-        tencentId:  sessionStorage.getItem("tencentId")  || undefined,
-        tencentKey: sessionStorage.getItem("tencentKey") || undefined,
-      };
-
-      const loadingEl  = $("#futureLoading");
-      const loadTextEl = document.getElementById("futureLoadingText");
-      if (loadTextEl) loadTextEl.textContent = "Generating 2D face…";
+      if (loadTextEl) loadTextEl.textContent = cfg.loadingLabel;
 
       const res2d = await fetch("/api/generate-2d", {
         method: "POST",
@@ -633,7 +915,7 @@
       if (!res2d.ok) throw new Error(`2D generation failed: ${res2d.status}`);
       const { image: modifiedImage } = await res2d.json();
 
-      loadingEl.innerHTML = `<img src="${modifiedImage}" style="max-width:100%;border-radius:8px" /><p style="font-size:12px;color:#888">2D ready — building 3D…</p>`;
+      loadingEl.innerHTML = `<img src="${modifiedImage}" style="max-width:100%;border-radius:8px" /><p style="font-size:12px;color:#888">${cfg.previewLabel}</p>`;
 
       const res3d = await fetch("/api/generate-avatar", {
         method: "POST",
@@ -644,16 +926,22 @@
       const { jobId } = await res3d.json();
 
       const modelUrl = await pollJob(jobId);
-      const modelEl  = $("#futureModel");
       modelEl.style.display = "block";
       loadingEl.style.display = "none";
       modelEl.setAttribute("src", `/api/proxy-model?url=${encodeURIComponent(modelUrl)}`);
       modelEl.addEventListener("error", (e) => console.error("model-viewer error:", e), { once: true });
     } catch (err) {
-      console.error("Future avatar error:", err);
-      $("#futureLoading").innerHTML =
+      console.error(`${kind} future avatar error:`, err);
+      loadingEl.innerHTML =
         `<p class="hint avatar-error">Generation unavailable.<br><small>${err.message}</small></p>`;
     }
+  }
+
+  async function generateComparisonAvatars() {
+    await Promise.allSettled([
+      generateScenarioAvatar("same"),
+      generateScenarioAvatar("improve"),
+    ]);
   }
 
   function pollJob(jobId, intervalMs = 5000) {
@@ -681,14 +969,24 @@
   }
 
   // ── Coach ────────────────────────────────────────────────────────────────────
-  async function populateFutureCoach() {
-    $("#futureCoach").textContent = "Thinking…";
-    const msg = await Coach.coachMessage("improve", state.habits, state.prediction.improve);
+  async function populateScenarioCoach(kind) {
+    const cfg = AVATAR_SCENARIOS[kind];
+    const coachEl = document.getElementById(cfg.coachId);
+    coachEl.textContent = "Thinking…";
+    const projection = cfg.scenario === "same" ? state.prediction.same : state.prediction.improve;
+    const msg = await Coach.coachMessage(cfg.scenario, state.habits, projection);
     const wp  = state.weightPlan;
-    const suffix = (wp && wp.kgToLose > 0 && wp.isFeasible)
+    const suffix = (wp && wp.kgToLose > 0 && wp.isFeasible && cfg.scenario === "improve")
       ? ` Your ${wp.months}-month target: lose ${wp.kgToLose} kg.`
       : "";
-    $("#futureCoach").textContent = msg + suffix;
+    coachEl.textContent = msg + suffix;
+  }
+
+  async function populateFutureCoaches() {
+    await Promise.allSettled([
+      populateScenarioCoach("same"),
+      populateScenarioCoach("improve"),
+    ]);
   }
 
   // ── Speak button ─────────────────────────────────────────────────────────────
@@ -697,7 +995,8 @@
     if (!btn) return;
     const targetId = btn.dataset.target;
     const text     = document.getElementById(targetId)?.textContent;
-    const modelEl  = $("#futureModel");
+    const modelEl  = document.getElementById(btn.dataset.model);
+    const scenario = btn.dataset.scenario || "improve";
 
     if (btn.classList.contains("playing")) {
       AvatarVoice.stop();
@@ -706,7 +1005,7 @@
     }
     document.querySelectorAll(".speak.playing").forEach(b => b.classList.remove("playing"));
     btn.classList.add("playing");
-    const utter = AvatarVoice.speak(text, "improve", modelEl);
+    const utter = AvatarVoice.speak(text, scenario, modelEl);
     Promise.resolve(utter).then(u => {
       if (!u) return;
       const prevEnd = u.onend;
@@ -737,13 +1036,19 @@
     $("#watchSynced").innerHTML =
       '<span class="sync-dot"></span> Synced from Apple Health · <span id="syncTime">just now</span>';
 
-    $("#futureLoading").innerHTML  = SPINNER_HTML;
-    $("#futureLoading").style.display = "";
-    $("#futureModel").removeAttribute("src");
-    $("#futureModel").style.display   = "none";
+    Object.values(AVATAR_SCENARIOS).forEach(cfg => {
+      const loadingEl = document.getElementById(cfg.loadingId);
+      const modelEl = document.getElementById(cfg.modelId);
+      const coachEl = document.getElementById(cfg.coachId);
+      loadingEl.innerHTML = spinnerMarkup(cfg.loadingTextId, cfg.loadingLabel);
+      loadingEl.style.display = "";
+      modelEl.removeAttribute("src");
+      modelEl.style.display = "none";
+      coachEl.textContent = "Loading coach…";
+    });
     $("#scienceCard").innerHTML    = "";
     $("#progressBars").innerHTML   = "";
-    $("#futureCoach").textContent  = "Loading coach…";
+    setTodayInputs();
 
     showStep(1);
   });

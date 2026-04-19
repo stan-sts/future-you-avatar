@@ -23,17 +23,16 @@
   function clamp(x, lo, hi) { return Math.max(lo, Math.min(hi, x)); }
   function round1(x) { return Math.round(x * 10) / 10; }
 
-  function improvedHabits(h) {
-    const step = (v, ideal) => v + (ideal - v) * 0.4;
+  function idealHabits() {
     return {
-      sleep:    round1(step(h.sleep,    IDEAL.sleep)),
-      exercise: Math.round(step(h.exercise, IDEAL.exercise)),
-      water:    Math.round(step(h.water,    IDEAL.water)),
-      steps:    Math.round(step(h.steps,    IDEAL.steps) / 500) * 500,
-      diet:     Math.round(step(h.diet,     IDEAL.diet)),
-      stress:   Math.round(step(h.stress,   IDEAL.stress)),
-      smoking:  Math.round(step(h.smoking,  IDEAL.smoking)),
-      alcohol:  Math.round(step(h.alcohol,  IDEAL.alcohol)),
+      sleep: IDEAL.sleep,
+      exercise: IDEAL.exercise,
+      water: IDEAL.water,
+      steps: IDEAL.steps,
+      diet: IDEAL.diet,
+      stress: IDEAL.stress,
+      smoking: IDEAL.smoking,
+      alcohol: IDEAL.alcohol,
     };
   }
 
@@ -57,10 +56,10 @@
   }
 
   function predictBoth(habits) {
-    const same    = project(habits, "same");
-    const improved = improvedHabits(habits);
-    const improve = project(improved, "improve");
-    return { same, improve, improvedHabits: improved };
+    const same = project(habits, "same");
+    const ideal = idealHabits();
+    const improve = project(ideal, "improve");
+    return { same, improve, improvedHabits: ideal };
   }
 
   // Weight loss plan with calorie science (1 kg fat ≈ 7700 kcal)
@@ -86,42 +85,45 @@
     };
   }
 
-  // Build a prompt describing the ACHIEVED goal state for gpt-image-1.
-  // Each habit that needs improvement contributes a positive visual outcome —
-  // showing what the person looks like after months of healthy living.
-  function goalAvatarPrompt(habits, goalInfo) {
-    const improvements = [];
+  function scenarioAvatarPrompt(habits, goalInfo, scenario) {
+    const base = 'DSLR photograph of the exact same real person from the reference photo — identical clothing, identical body, full body head to toe, standing confidently on a plain white background';
+    const camera = 'High-end beauty photography, shot on Canon EOS R5, 85mm f/1.4, soft studio lighting. Skin looks real with natural texture, not plastic. NO illustration, NO anime, NO cartoon, NO painting, NO 3D render, NO CGI, NO digital art.';
 
-    // Weight loss → structural face change
+    if (scenario === "same") {
+      const currentPath = [];
+
+      if (goalInfo.kgToLose > 10) currentPath.push('face still looks heavier and softer around the jawline');
+      else if (goalInfo.kgToLose > 3) currentPath.push('face still looks slightly fuller with only minimal jaw definition');
+
+      if (habits.sleep < 7.5) currentPath.push('mild dark circles, faint under-eye puffiness, slightly tired eyes');
+      if (habits.water < 7) currentPath.push('skin looks a little dry and less luminous');
+      if (habits.stress > 5) currentPath.push('subtle tension in the forehead and expression');
+      if (habits.smoking > 0) currentPath.push('slightly duller skin tone');
+      if (habits.alcohol > 3) currentPath.push('a touch of facial puffiness or redness');
+      if (habits.exercise < 4) currentPath.push('less athletic energy and less physical vitality');
+      if (habits.diet < 7) currentPath.push('skin texture looks more uneven');
+
+      const desc = currentPath.length
+        ? currentPath.join(', ')
+        : 'mostly similar to today with only subtle natural aging and very limited improvement';
+
+      return `${base}. This person looks like the realistic outcome of keeping mostly the same habits for 6 months: ${desc}. Keep the person recognizable and real, not glamorized, not idealized, not harshly unhealthy, just plausibly a slightly more fatigued or unchanged version of the same person. ${camera}`;
+    }
+
+    const improvements = [];
     if (goalInfo.kgToLose > 10) improvements.push('visibly leaner face, defined cheekbones, sharper jawline');
     else if (goalInfo.kgToLose > 3) improvements.push('slightly leaner face, more defined jawline');
-
-    // Sleep improvement → eyes and skin repair
     if (habits.sleep < 7.5) improvements.push('no dark circles whatsoever, no under-eye bags, bright wide-awake eyes, well-rested glow');
-
-    // Hydration improvement → plump skin
     if (habits.water < 7) improvements.push('deeply hydrated skin, plump radiant complexion, natural luminosity');
-
-    // Stress reduction → smooth face
     if (habits.stress > 5) improvements.push('smooth relaxed forehead, no tension lines, calm serene expression');
-
-    // Quit or reduce smoking → skin clarity
     if (habits.smoking > 0) improvements.push('clear even skin tone, no dullness or yellowing, healthier complexion');
-
-    // Reduce alcohol → no puffiness
     if (habits.alcohol > 3) improvements.push('no facial redness, no puffiness, clean defined features');
-
-    // Exercise → glow and vitality
     if (habits.exercise < 4) improvements.push('healthy active glow, energetic vibrant look, fit appearance');
-
-    // Better diet → skin brightness
     if (habits.diet < 7) improvements.push('clear bright skin, even healthy colour, smooth texture');
 
-    const base = 'DSLR photograph of the exact same real person from the reference photo — identical clothing, identical body, full body head to toe, standing confidently on a plain white background';
     const desc = improvements.length ? improvements.join(', ') : 'glowing luminous skin, bright captivating eyes, radiant well-rested look';
-
-    return `${base}. This person looks: ${desc}, slightly more attractive version of themselves — sharper jawline, more defined facial features, better bone structure, confident glow — as if they have been living healthily for 6 months. High-end beauty photography — like a professional retouched magazine cover photo of a real human being. Skin looks real with natural texture, not smoothed into plastic. NO illustration, NO anime, NO cartoon, NO painting, NO 3D render, NO CGI, NO digital art. Must look like a real photograph of a real person, shot on Canon EOS R5, 85mm f/1.4, soft studio lighting.`;
+    return `${base}. This person looks: ${desc}, slightly more attractive version of themselves — sharper jawline, more defined facial features, better bone structure, confident glow — as if they have been living healthily for 6 months. ${camera}`;
   }
 
-  global.Predictor = { predictBoth, healthScore, calculateWeightPlan, goalAvatarPrompt };
+  global.Predictor = { predictBoth, healthScore, calculateWeightPlan, scenarioAvatarPrompt };
 })(window);

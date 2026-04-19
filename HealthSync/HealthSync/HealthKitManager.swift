@@ -6,6 +6,7 @@ struct DailyHealthSample: Codable {
     var sleep: Double
     var steps: Double
     var activeEnergy: Double
+    var heartRate: Double?
     var workoutMetGoal: Bool
 }
 
@@ -103,6 +104,7 @@ class HealthKitManager: ObservableObject {
         let formatter = ISO8601DateFormatter()
         formatter.formatOptions = [.withFullDate]
         let sleepMap = await sleepHistory(days: 7)
+        let heartRateMap = await heartRateHistory(days: 7)
 
         var days: [DailyHealthSample] = []
         for offset in stride(from: 6, through: 0, by: -1) {
@@ -117,6 +119,7 @@ class HealthKitManager: ObservableObject {
                 sleep: sleepMap[start] ?? 0,
                 steps: steps,
                 activeEnergy: activeEnergy,
+                heartRate: heartRateMap[start],
                 workoutMetGoal: activeEnergy >= 300
             ))
         }
@@ -158,6 +161,23 @@ class HealthKitManager: ObservableObject {
         }
     }
 
+    private func heartRateHistory(days: Int) async -> [Date: Double] {
+        let cal = Calendar.current
+        var buckets: [Date: Double] = [:]
+
+        for offset in stride(from: days - 1, through: 0, by: -1) {
+            let day = cal.date(byAdding: .day, value: -offset, to: Date())!
+            let start = cal.startOfDay(for: day)
+            let end = cal.date(byAdding: .day, value: 1, to: start)!
+            let avg = await queryAverage(.heartRate, unit: HKUnit.count().unitDivided(by: .minute()), start: start, end: end)
+            if avg > 0 {
+                buckets[start] = avg
+            }
+        }
+
+        return buckets
+    }
+
     private func querySum(_ id: HKQuantityTypeIdentifier, unit: HKUnit,
                           days: Int) async -> Double {
         let end   = Date()
@@ -174,6 +194,20 @@ class HealthKitManager: ObservableObject {
             let q = HKStatisticsQuery(quantityType: type, quantitySamplePredicate: pred,
                                        options: .cumulativeSum) { _, stats, _ in
                 cont.resume(returning: stats?.sumQuantity()?.doubleValue(for: unit) ?? 0)
+            }
+            self.store.execute(q)
+        }
+    }
+
+    private func queryAverage(_ id: HKQuantityTypeIdentifier, unit: HKUnit,
+                              start: Date, end: Date) async -> Double {
+        let pred = HKQuery.predicateForSamples(withStart: start, end: end)
+        let type = HKQuantityType(id)
+
+        return await withCheckedContinuation { cont in
+            let q = HKStatisticsQuery(quantityType: type, quantitySamplePredicate: pred,
+                                      options: .discreteAverage) { _, stats, _ in
+                cont.resume(returning: stats?.averageQuantity()?.doubleValue(for: unit) ?? 0)
             }
             self.store.execute(q)
         }

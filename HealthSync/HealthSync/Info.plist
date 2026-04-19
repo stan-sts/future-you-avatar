@@ -6,6 +6,13 @@
 	<string>Future You reads your sleep, steps, exercise, heart rate, and water intake to generate your 6-month health avatar.</string>
 	<key>NSHealthUpdateUsageDescription</key>
 	<string>Future You does not write any health data.</string>
+	<key>NSLocalNetworkUsageDescription</key>
+	<string>Future You connects to your laptop on the local network to send your Apple Health summary to the web app.</string>
+	<key>NSAppTransportSecurity</key>
+	<dict>
+		<key>NSAllowsLocalNetworking</key>
+		<true/>
+	</dict>
 	<key>UILaunchScreen</key>
 	<dict/>
 </dict>
