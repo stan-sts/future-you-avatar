@@ -3,6 +3,7 @@ const express = require('express');
 const https = require('https');
 const os = require('os');
 const tencentcloud = require('tencentcloud-sdk-nodejs');
+const { generateRecommendation } = require('./recommendation');
 
 const HunyuanClient = tencentcloud.hunyuan.v20230901.Client;
 
@@ -244,6 +245,16 @@ app.get('/api/proxy-model', (req, res) => {
     if (!res.headersSent) res.status(504).send('Upstream timeout');
   });
 });
+
+// ── K2 Think: single constrained recommendation after results ────────────────
+app.post('/api/recommendation', wrap(async (req, res) => {
+  const { sleep, steps, activeEnergy, heartRate, screenTime, goal, k2Key } = req.body || {};
+  const recommendation = await generateRecommendation(
+    { sleep, steps, activeEnergy, heartRate, screenTime, goal },
+    { apiKey: k2Key || process.env.K2_THINK_KEY }
+  );
+  res.json(recommendation);
+}));
 
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {

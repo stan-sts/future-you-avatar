@@ -11,6 +11,7 @@
     affirmationAudioUrl: null,
     affirmationAudioBlob: null,
     questionnaire: null,
+    recommendation: null,
   };
 
   const $ = (sel) => document.querySelector(sel);
@@ -559,6 +560,7 @@ $("#connectWatch").addEventListener("click", () => {
     );
     showStep(4);
     renderFutureResults();
+    refreshRecommendation();
     await Promise.all([
       generateComparisonAvatars(),
       populateFutureCoaches(),
@@ -850,6 +852,139 @@ $("#connectWatch").addEventListener("click", () => {
     $("#futureSubtitle").textContent = `In ${label}, compare your likely current-path self with your evidence-based ideal self.`;
     renderScienceCard();
     renderProgressBars();
+    renderRecommendationCard();
+  }
+
+  function recommendationModeLabel() {
+    return state.syncedHealth?.raw ? "Based on your data" : "Based on your inputs";
+  }
+
+  function prettyRecommendationIssue(issue) {
+    switch (issue) {
+      case "sleep_deficit": return "Sleep deficit";
+      case "high_screen_time": return "High screen time";
+      case "low_activity": return "Low activity";
+      case "high_stress": return "High stress";
+      case "balanced_state": return "Balanced state";
+      default: return String(issue || "");
+    }
+  }
+
+  function escapeHtml(value) {
+    return String(value || "")
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;")
+      .replace(/'/g, "&#039;");
+  }
+
+  function renderRecommendationCard() {
+    const el = $("#recommendationCard");
+    if (!el) return;
+
+    const mode = recommendationModeLabel();
+    const recState = state.recommendation;
+
+    if (recState?.loading) {
+      el.innerHTML = `
+        <div class="recommendation-head">
+          <div class="science-title">Today&rsquo;s Recommendation</div>
+          <div class="recommendation-source">${mode}</div>
+        </div>
+        <p class="recommendation-loading">Generating one focused recommendation…</p>
+      `;
+      return;
+    }
+
+    if (recState?.error) {
+      el.innerHTML = `
+        <div class="recommendation-head">
+          <div class="science-title">Today&rsquo;s Recommendation</div>
+          <div class="recommendation-source">${mode}</div>
+        </div>
+        <p class="recommendation-error">Unable to load a recommendation right now.</p>
+      `;
+      return;
+    }
+
+    if (!recState?.data) {
+      el.innerHTML = `
+        <div class="recommendation-head">
+          <div class="science-title">Today&rsquo;s Recommendation</div>
+          <div class="recommendation-source">${mode}</div>
+        </div>
+        <p class="recommendation-loading">Run your projection to see a grounded, single action for today.</p>
+      `;
+      return;
+    }
+
+    const issue = prettyRecommendationIssue(recState.data.issue);
+    const explanation = escapeHtml(recState.data.explanation);
+    const action = escapeHtml(recState.data.action);
+    const impact = escapeHtml(recState.data.impact);
+
+    el.innerHTML = `
+      <div class="recommendation-head">
+        <div class="science-title">Today&rsquo;s Recommendation</div>
+        <div class="recommendation-source">${mode}</div>
+      </div>
+      <div class="recommendation-issue"><b>${issue}</b></div>
+      <p class="recommendation-explanation">${explanation}</p>
+      <div class="recommendation-action">Action: ${action}</div>
+      <p class="recommendation-impact">Impact: ${impact}</p>
+    `;
+  }
+
+  function readOptionalUiNumber(selectors) {
+    for (const sel of selectors) {
+      const el = document.querySelector(sel);
+      if (!el) continue;
+      const val = Number(el.value);
+      if (Number.isFinite(val)) return val;
+    }
+    return null;
+  }
+
+  let recommendationRequestId = 0;
+  async function refreshRecommendation() {
+    if (!state.habits || !state.goals) return;
+    if (!$("#recommendationCard")) return;
+
+    const requestId = ++recommendationRequestId;
+    state.recommendation = { loading: true, error: null, data: null };
+    renderRecommendationCard();
+
+    const payload = {
+      sleep: state.habits.sleep,
+      steps: state.habits.steps,
+      screenTime: state.habits.screenTime,
+      activeEnergy: readOptionalUiNumber(["#activeEnergy", "#todayActiveEnergy"]),
+      heartRate: readOptionalUiNumber(["#heartRate", "#todayHeartRate"]),
+      goal: {
+        currentWeight: state.goals.currentWeight,
+        targetWeight: state.goals.targetWeight,
+        timeframe: state.goals.months,
+      },
+    };
+
+    try {
+      const res = await fetch("/api/recommendation", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const json = await res.json();
+      if (requestId !== recommendationRequestId) return;
+      state.recommendation = { loading: false, error: null, data: json };
+      renderRecommendationCard();
+    } catch (err) {
+      if (requestId !== recommendationRequestId) return;
+      console.error("Recommendation error:", err);
+      state.recommendation = { loading: false, error: err, data: null };
+      renderRecommendationCard();
+    }
   }
 
   function renderScienceCard() {
@@ -1464,6 +1599,7 @@ $("#connectWatch").addEventListener("click", () => {
       affirmationAudioUrl: null,
       affirmationAudioBlob: null,
       questionnaire: null,
+      recommendation: null,
     });
     $("#selfieInput").value       = "";
     $("#selfiePreview").innerHTML = "";
@@ -1508,6 +1644,7 @@ $("#connectWatch").addEventListener("click", () => {
     });
     $("#scienceCard").innerHTML    = "";
     $("#progressBars").innerHTML   = "";
+    $("#recommendationCard").innerHTML = "";
     setTodayInputs();
     resetReflection();
 

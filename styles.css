@@ -1105,6 +1105,65 @@ model-viewer {
   color: var(--bad);
 }
 
+.recommendation-card {
+  margin-top: 14px;
+}
+
+.recommendation-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+
+.recommendation-source {
+  font-family: var(--mono);
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+  white-space: nowrap;
+}
+
+.recommendation-issue {
+  margin: 0 0 8px;
+  font-size: 16px;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+}
+
+.recommendation-explanation {
+  margin: 0 0 12px;
+  font-size: 14px;
+  line-height: 1.55;
+  color: var(--ink-2);
+}
+
+.recommendation-action {
+  margin: 0 0 10px;
+  padding: 12px 12px;
+  border: 1px solid var(--line);
+  background: rgba(212, 255, 58, 0.16);
+  font-size: 14px;
+  font-weight: 800;
+  line-height: 1.45;
+}
+
+.recommendation-impact {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--muted);
+}
+
+.recommendation-loading,
+.recommendation-error {
+  margin: 0;
+  color: var(--ink-3);
+  line-height: 1.55;
+}
+
 .coach {
   padding: 16px;
 }
