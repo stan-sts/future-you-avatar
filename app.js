@@ -211,7 +211,10 @@
 
   function currentStreak(days, key) {
     let streak = 0;
-    for (let i = days.length - 1; i >= 0; i--) {
+    // Start from yesterday if today hasn't hit goal yet (day still in progress)
+    const start = days.length - 1;
+    const firstIdx = !days[start]?.[key] ? start - 1 : start;
+    for (let i = firstIdx; i >= 0; i--) {
       if (!days[i][key]) break;
       streak += 1;
     }
