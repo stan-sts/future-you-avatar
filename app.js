@@ -1297,9 +1297,16 @@ $("#connectWatch").addEventListener("click", () => {
         }
       }
 
-      // Store 2D image for toggle
-      if (img2dEl) img2dEl.src = modifiedImage;
-      loadingEl.innerHTML = `<img src="${modifiedImage}" style="max-width:100%;border-radius:8px" /><p style="font-size:12px;color:#888">${cfg.previewLabel}</p>`;
+      // 2D ready — show it immediately, reveal toggle with 3D as "generating"
+      if (img2dEl) { img2dEl.src = modifiedImage; img2dEl.classList.remove("hidden"); }
+      loadingEl.style.display = "none";
+      if (toggleEl) {
+        toggleEl.classList.remove("hidden");
+        const btn3d = toggleEl.querySelector('[data-view="3d"]');
+        const btn2d = toggleEl.querySelector('[data-view="2d"]');
+        if (btn2d) { btn2d.classList.add("active"); }
+        if (btn3d) { btn3d.disabled = true; btn3d.classList.remove("active"); btn3d.textContent = "3D Generating…"; }
+      }
 
       const res3d = await fetch("/api/generate-avatar", {
         method: "POST",
@@ -1310,13 +1317,17 @@ $("#connectWatch").addEventListener("click", () => {
       const { jobId } = await res3d.json();
 
       const modelUrl = await pollJob(jobId);
+      // 3D ready — switch to 3D view and enable toggle
+      if (img2dEl) img2dEl.classList.add("hidden");
       modelEl.style.display = "block";
-      loadingEl.style.display = "none";
       modelEl.setAttribute("src", `/api/proxy-model?url=${encodeURIComponent(modelUrl)}`);
       modelEl.addEventListener("error", (e) => console.error("model-viewer error:", e), { once: true });
-
-      // Show 2D/3D toggle now that both are available
-      if (toggleEl) toggleEl.classList.remove("hidden");
+      if (toggleEl) {
+        const btn3d = toggleEl.querySelector('[data-view="3d"]');
+        const btn2d = toggleEl.querySelector('[data-view="2d"]');
+        if (btn3d) { btn3d.disabled = false; btn3d.textContent = "3D Model"; btn3d.classList.add("active"); }
+        if (btn2d) btn2d.classList.remove("active");
+      }
     } catch (err) {
       console.error(`${kind} future avatar error:`, err);
       if (modifiedImage && img2dEl) {
