@@ -19,8 +19,8 @@
       </div>
       <div class="nav-ticker" aria-label="Project summary">
         <span><b>Mode</b> Health Projection</span>
-        <span><b>Input</b> Selfie + Habits</span>
-        <span><b>Output</b> 3D Future Avatar</span>
+        <span><b>Input</b> Photo + Habits</span>
+        <span><b>Output</b> Avatar + Reflection</span>
       </div>
       <div class="nav-meta">Window <b>6 Months</b></div>
       <div class="status-live">Planner Live</div>
@@ -32,15 +32,15 @@
         <h1 class="hero-title">Build Your <span class="voltblock">Future</span> Self</h1>
       </div>
       <div class="hero-side">
-        <p class="hero-blurb">Upload a portrait, tune your health signals, sync Apple Health, and inspect a projection that feels more like a lab dashboard than a generic form.</p>
+        <p class="hero-blurb">Upload any photo that matters to you, tune your health signals, sync Apple Health, and inspect a projection that shows how your habits shape the energy and outlook around you.</p>
         <div class="hero-stats">
           <div class="hero-stat">
             <div class="l">Workflow</div>
-            <div class="v">4 Steps</div>
+            <div class="v">5 Steps</div>
           </div>
           <div class="hero-stat">
             <div class="l">Signals</div>
-            <div class="v">Sleep / Move / Steps</div>
+            <div class="v">Sleep / Move / Screen Time</div>
           </div>
         </div>
       </div>
@@ -67,6 +67,11 @@
         <div class="step-title">Projection</div>
         <div class="step-status">Review your future self</div>
       </button>
+      <button class="step-tab" data-step-target="5" type="button">
+        <div class="step-n">05 <span>Reflect</span></div>
+        <div class="step-title">Reflection</div>
+        <div class="step-status">Affirmation + optional check-in</div>
+      </button>
     </div>
 
     <main id="app">
@@ -75,16 +80,16 @@
       <section class="step" data-step="1">
         <div class="section-head">
           <div class="num">01</div>
-          <h2>Upload Source Portrait</h2>
+          <h2>Upload Reference Photo</h2>
           <div class="meta">Reference image / face scan</div>
         </div>
         <div class="step-panel">
-          <p class="hint">Use a clear selfie with your face visible. We use it as the base reference for the future projection.</p>
+          <p class="hint">Upload a photo of you, your pet, or anything that matters to you. We use it as the visual anchor, but the projection still reflects your habits, routines, and overall wellbeing.</p>
           <div class="upload-grid">
             <label class="uploader">
               <input id="selfieInput" type="file" accept="image/*" />
               <span>Drop or choose a photo</span>
-              <small>Front-facing portrait recommended</small>
+              <small>Clear lighting helps, but it does not need to be a strict selfie</small>
             </label>
             <div id="selfiePreview" class="preview hidden"></div>
           </div>
@@ -164,6 +169,17 @@
                 </div>
                 <input type="range" class="habit-range" id="steps" min="0" max="30000" step="500" value="5000" />
                 <span class="habit-val" id="stepsVal">5,000</span>
+              </div>
+              <div class="habit-row" data-id="screenTime">
+                <div class="habit-meta">
+                  <span class="habit-icon">📱</span>
+                  <div class="habit-label-wrap">
+                    <span class="habit-name">Screen time</span>
+                    <span class="habit-unit">hrs / day</span>
+                  </div>
+                </div>
+                <input type="range" class="habit-range" id="screenTime" min="0" max="16" step="0.5" value="6" />
+                <span class="habit-val" id="screenTimeVal">6</span>
               </div>
               <div class="habit-row" data-id="diet">
                 <div class="habit-meta">
@@ -275,6 +291,17 @@
                   </div>
                   <input type="range" class="habit-range" id="gSteps" min="0" max="30000" step="500" value="10000" />
                   <span class="habit-val" id="gStepsVal">10,000</span>
+                </div>
+                <div class="habit-row" data-id="gScreenTime">
+                  <div class="habit-meta">
+                    <span class="habit-icon">📱</span>
+                    <div class="habit-label-wrap">
+                      <span class="habit-name">Screen time</span>
+                      <span class="habit-unit">hrs / day</span>
+                    </div>
+                  </div>
+                  <input type="range" class="habit-range" id="gScreenTime" min="0" max="16" step="0.5" value="3" />
+                  <span class="habit-val" id="gScreenTimeVal">3</span>
                 </div>
                 <div class="habit-row" data-id="gDiet">
                   <div class="habit-meta">
@@ -441,7 +468,87 @@
 
           <div class="actions center">
             <button id="back3" class="ghost" type="button">Back</button>
+            <button id="toStep5" class="primary" type="button">Next: Reflection</button>
             <button id="restart" class="ghost" type="button">Start Over</button>
+          </div>
+        </div>
+      </section>
+
+      <!-- ── Step 5: Reflection ─────────────────────────────────────────────── -->
+      <section class="step hidden" data-step="5">
+        <div class="section-head">
+          <div class="num">05</div>
+          <h2>Reflection Studio</h2>
+          <div class="meta">Affirmation / voice memo / optional check-in</div>
+        </div>
+        <div class="step-panel">
+          <div class="reflection-layout">
+            <section class="subsection reflection-card">
+              <div class="reflection-head">
+                <div class="section-label">Audio positive affirmation</div>
+                <button id="shuffleAffirmation" class="ghost" type="button">New prompt</button>
+              </div>
+              <p class="subsection-intro">Record a short note to your future self. Keep it kind, specific, and grounded in the habits you actually want to protect.</p>
+              <div class="affirmation-prompt" id="affirmationPrompt">Pick a reflection prompt to begin.</div>
+              <div class="affirmation-actions">
+                <button id="recordAffirmation" class="primary" type="button">Record</button>
+                <button id="stopAffirmation" class="ghost" type="button" disabled>Stop</button>
+                <button id="playAffirmation" class="ghost" type="button">Play back</button>
+                <button id="clearAffirmation" class="ghost" type="button">Clear</button>
+              </div>
+              <p class="hint affirmation-status" id="affirmationStatus">No recording yet. Your clip stays in this browser session.</p>
+              <div class="affirmation-playback hidden" id="affirmationPlaybackWrap">
+                <audio id="affirmationPlayback" controls preload="metadata"></audio>
+              </div>
+            </section>
+
+            <section class="subsection questionnaire-card">
+              <div class="reflection-head">
+                <div>
+                  <div class="section-label">Weekly questionnaire</div>
+                  <p class="subsection-intro questionnaire-intro">Optional to answer. This is just a lightweight check-in you can use at the end of the flow.</p>
+                </div>
+                <span class="optional-badge">Optional</span>
+              </div>
+
+              <div class="questionnaire-grid">
+                <label class="question-field">
+                  <span>How grounded do you feel right now?</span>
+                  <input id="questionMood" type="range" min="1" max="5" step="1" value="3" />
+                  <small><span id="questionMoodVal">3</span> / 5</small>
+                </label>
+
+                <label class="question-field">
+                  <span>How motivated do you feel for this next week?</span>
+                  <input id="questionMotivation" type="range" min="1" max="5" step="1" value="3" />
+                  <small><span id="questionMotivationVal">3</span> / 5</small>
+                </label>
+
+                <label class="question-field full">
+                  <span>What habit win are you proud of?</span>
+                  <textarea id="questionWin" rows="3" placeholder="Anything small counts."></textarea>
+                </label>
+
+                <label class="question-field full">
+                  <span>What kept pulling you off track?</span>
+                  <textarea id="questionBlocker" rows="3" placeholder="Stress, late nights, doomscrolling, schedule overload..."></textarea>
+                </label>
+
+                <label class="question-field full">
+                  <span>One promise to your future self for the next 7 days</span>
+                  <input id="questionCommitment" type="text" placeholder="Example: phone off by 11pm every night" />
+                </label>
+              </div>
+
+              <div class="questionnaire-foot">
+                <span id="questionnaireSaved" class="hint">Answers save locally on this device.</span>
+              </div>
+            </section>
+          </div>
+
+          <div class="actions">
+            <button id="back4" class="ghost" type="button">Back to Projection</button>
+            <button id="restartFromReflection" class="ghost" type="button">Start Over</button>
           </div>
         </div>
       </section>

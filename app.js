@@ -7,6 +7,10 @@
     weightPlan: null,
     prediction: null,
     syncedHealth: null,
+    affirmationPromptIndex: 0,
+    affirmationAudioUrl: null,
+    affirmationAudioBlob: null,
+    questionnaire: null,
   };
 
   const $ = (sel) => document.querySelector(sel);
@@ -14,6 +18,15 @@
   const stepTabs = document.querySelectorAll(".step-tab");
   const HEALTH_GOALS = { sleep: 8, activeEnergy: 300, steps: 10000 };
   const HEART_RATE_BAND = { low: 50, high: 90 };
+  const QUESTIONNAIRE_STORAGE_KEY = "future-you-reflection-draft";
+  const AFFIRMATION_PROMPTS = [
+    "Say out loud what your future self will thank you for 6 months from now.",
+    "Record one sentence about the version of you that protects sleep instead of sacrificing it.",
+    "Name the habit that makes you feel most alive when you actually follow through.",
+    "Describe how you want your energy to feel at the end of a normal weekday.",
+    "Speak to yourself like a coach: what do you need to remember when stress pushes you into scrolling?",
+    "What would a calmer, more rested version of you want tonight to look like?",
+  ];
   const AVATAR_SCENARIOS = {
     same: {
       loadingId: "sameFutureLoading",
@@ -40,13 +53,14 @@
   };
 
   // ── Habit slider configs ─────────────────────────────────────────────────────
-  const GOAL_HABIT_DEFAULTS = { gSleep: 8, gExercise: 5, gWater: 8, gSteps: 10000, gDiet: 8, gStress: 3, gSmoking: 0, gAlcohol: 3 };
+  const GOAL_HABIT_DEFAULTS = { gSleep: 8, gExercise: 5, gWater: 8, gSteps: 10000, gScreenTime: 3, gDiet: 8, gStress: 3, gSmoking: 0, gAlcohol: 3 };
 
   const GOAL_HABITS = [
     { id: "gSleep",    optimal: 8,     max: 12,    invert: false, fmt: v => v },
     { id: "gExercise", optimal: 5,     max: 7,     invert: false, fmt: v => v },
     { id: "gWater",    optimal: 8,     max: 20,    invert: false, fmt: v => v },
     { id: "gSteps",    optimal: 10000, max: 30000, invert: false, fmt: v => Number(v).toLocaleString() },
+    { id: "gScreenTime", optimal: 2,   max: 16,    invert: true,  fmt: v => v },
     { id: "gDiet",     optimal: 8,     max: 10,    invert: false, fmt: v => v },
     { id: "gStress",   optimal: 3,     max: 10,    invert: true,  fmt: v => v },
     { id: "gSmoking",  optimal: 0,     max: 40,    invert: true,  fmt: v => v },
@@ -58,11 +72,19 @@
     { id: "exercise", optimal: 5,     max: 7,     invert: false, fmt: v => v },
     { id: "water",    optimal: 8,     max: 20,    invert: false, fmt: v => v },
     { id: "steps",    optimal: 10000, max: 30000, invert: false, fmt: v => Number(v).toLocaleString() },
+    { id: "screenTime", optimal: 2,   max: 16,    invert: true,  fmt: v => v },
     { id: "diet",     optimal: 8,     max: 10,    invert: false, fmt: v => v },
     { id: "stress",   optimal: 3,     max: 10,    invert: true,  fmt: v => v },
     { id: "smoking",  optimal: 0,     max: 40,    invert: true,  fmt: v => v },
     { id: "alcohol",  optimal: 0,     max: 40,    invert: true,  fmt: v => v },
   ];
+
+  let affirmationRecorder = null;
+  let affirmationStream = null;
+  let affirmationChunks = [];
+  let affirmationTimeout = null;
+  let affirmationStopReason = "Recording saved.";
+  let discardAffirmationOnStop = false;
 
   function healthRatio(cfg, value) {
     if (cfg.invert) return 1 - value / cfg.max;
@@ -417,6 +439,7 @@ $("#connectWatch").addEventListener("click", () => {
     if (step === 2) return Boolean(state.selfieDataUrl);
     if (step === 3) return Boolean(state.selfieDataUrl);
     if (step === 4) return Boolean(state.prediction);
+    if (step === 5) return Boolean(state.prediction);
     return false;
   }
 
@@ -456,7 +479,7 @@ $("#connectWatch").addEventListener("click", () => {
       resizeImage(reader.result, 1024, (resized) => {
         state.selfieDataUrl = resized;
         const preview = $("#selfiePreview");
-        preview.innerHTML = `<img src="${resized}" alt="your selfie" />`;
+        preview.innerHTML = `<img src="${resized}" alt="your uploaded reference" />`;
         preview.classList.remove("hidden");
         $("#toStep2").classList.remove("hidden");
         updateStepTabs(Number(document.body.dataset.step || 1));
@@ -483,6 +506,8 @@ $("#connectWatch").addEventListener("click", () => {
   $("#toStep3").addEventListener("click", () => showStep(3));
   $("#back2").addEventListener("click",   () => showStep(2));
   $("#back3").addEventListener("click",   () => showStep(3));
+  $("#toStep5").addEventListener("click", () => showStep(5));
+  $("#back4").addEventListener("click",   () => showStep(4));
 
   // ── Step 3: generate ─────────────────────────────────────────────────────────
   $("#generate").addEventListener("click", async () => {
@@ -503,7 +528,7 @@ $("#connectWatch").addEventListener("click", () => {
 
   function readHabits() {
     return Object.fromEntries(
-      ["sleep", "exercise", "water", "steps", "diet", "stress", "smoking", "alcohol"]
+      ["sleep", "exercise", "water", "steps", "screenTime", "diet", "stress", "smoking", "alcohol"]
         .map(f => [f, Number($("#" + f).value)])
     );
   }
@@ -514,6 +539,7 @@ $("#connectWatch").addEventListener("click", () => {
       exercise: Number($("#gExercise").value),
       water:    Number($("#gWater").value),
       steps:    Number($("#gSteps").value),
+      screenTime: Number($("#gScreenTime").value),
       diet:     Number($("#gDiet").value),
       stress:   Number($("#gStress").value),
       smoking:  Number($("#gSmoking").value),
@@ -527,6 +553,255 @@ $("#connectWatch").addEventListener("click", () => {
     const activeBtn     = document.querySelector(".tf-btn.active");
     const months        = parseInt(activeBtn?.dataset.months || 6);
     return { currentWeight, targetWeight, months };
+  }
+
+  function randomAffirmationIndex(excluding = state.affirmationPromptIndex) {
+    if (AFFIRMATION_PROMPTS.length <= 1) return 0;
+    let next = excluding;
+    while (next === excluding) {
+      next = Math.floor(Math.random() * AFFIRMATION_PROMPTS.length);
+    }
+    return next;
+  }
+
+  function setAffirmationPrompt(index) {
+    state.affirmationPromptIndex = index;
+    const el = $("#affirmationPrompt");
+    if (el) el.textContent = AFFIRMATION_PROMPTS[index];
+  }
+
+  function setAffirmationStatus(text, tone = "neutral") {
+    const el = $("#affirmationStatus");
+    if (!el) return;
+    el.textContent = text;
+    el.dataset.tone = tone;
+  }
+
+  function stopAffirmationStream() {
+    if (affirmationStream) {
+      affirmationStream.getTracks().forEach(track => track.stop());
+      affirmationStream = null;
+    }
+  }
+
+  function clearAffirmationTimeout() {
+    if (affirmationTimeout) {
+      clearTimeout(affirmationTimeout);
+      affirmationTimeout = null;
+    }
+  }
+
+  function setAffirmationAudio(blob) {
+    if (state.affirmationAudioUrl) {
+      URL.revokeObjectURL(state.affirmationAudioUrl);
+    }
+    state.affirmationAudioBlob = blob || null;
+    state.affirmationAudioUrl = blob ? URL.createObjectURL(blob) : null;
+
+    const audio = $("#affirmationPlayback");
+    const wrap = $("#affirmationPlaybackWrap");
+    if (audio) {
+      audio.pause();
+      audio.currentTime = 0;
+      audio.src = state.affirmationAudioUrl || "";
+    }
+    if (wrap) wrap.classList.toggle("hidden", !state.affirmationAudioUrl);
+  }
+
+  function updateAffirmationButtons() {
+    const isRecording = Boolean(affirmationRecorder && affirmationRecorder.state !== "inactive");
+    const hasAudio = Boolean(state.affirmationAudioUrl);
+    if ($("#recordAffirmation")) $("#recordAffirmation").disabled = isRecording;
+    if ($("#stopAffirmation")) $("#stopAffirmation").disabled = !isRecording;
+    if ($("#playAffirmation")) $("#playAffirmation").disabled = !hasAudio;
+    if ($("#clearAffirmation")) $("#clearAffirmation").disabled = !hasAudio && !isRecording;
+    if ($("#shuffleAffirmation")) $("#shuffleAffirmation").disabled = isRecording;
+  }
+
+  async function startAffirmationRecording() {
+    if (!navigator.mediaDevices?.getUserMedia || typeof MediaRecorder === "undefined") {
+      setAffirmationStatus("Audio recording is not supported in this browser.", "warn");
+      return;
+    }
+    if (affirmationRecorder && affirmationRecorder.state !== "inactive") return;
+
+    try {
+      affirmationStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      affirmationChunks = [];
+      affirmationStopReason = "Recording saved.";
+      discardAffirmationOnStop = false;
+      affirmationRecorder = new MediaRecorder(affirmationStream);
+      affirmationRecorder.ondataavailable = (event) => {
+        if (event.data && event.data.size) affirmationChunks.push(event.data);
+      };
+      affirmationRecorder.onerror = () => {
+        clearAffirmationTimeout();
+        stopAffirmationStream();
+        affirmationRecorder = null;
+        updateAffirmationButtons();
+        setAffirmationStatus("Recording failed. Please try again.", "bad");
+      };
+      affirmationRecorder.onstop = () => {
+        clearAffirmationTimeout();
+        stopAffirmationStream();
+        const blob = affirmationChunks.length ? new Blob(affirmationChunks, { type: affirmationRecorder?.mimeType || "audio/webm" }) : null;
+        affirmationRecorder = null;
+        affirmationChunks = [];
+        if (discardAffirmationOnStop) {
+          discardAffirmationOnStop = false;
+          setAffirmationAudio(null);
+          setAffirmationStatus(affirmationStopReason, "neutral");
+        } else if (blob) {
+          setAffirmationAudio(blob);
+          setAffirmationStatus(affirmationStopReason, "good");
+        } else if (!state.affirmationAudioUrl) {
+          setAffirmationStatus("No audio was captured this time.", "warn");
+        }
+        updateAffirmationButtons();
+      };
+      affirmationRecorder.start();
+      setAffirmationStatus("Recording... keep it under 2 minutes.", "recording");
+      clearAffirmationTimeout();
+      affirmationTimeout = setTimeout(() => {
+        affirmationStopReason = "Max length reached. Recording saved.";
+        stopAffirmationRecording();
+      }, 120000);
+      updateAffirmationButtons();
+    } catch (err) {
+      console.error("Affirmation recording error:", err);
+      stopAffirmationStream();
+      setAffirmationStatus("Microphone access was blocked. Allow it to record an affirmation.", "bad");
+      updateAffirmationButtons();
+    }
+  }
+
+  function stopAffirmationRecording() {
+    if (!affirmationRecorder || affirmationRecorder.state === "inactive") return;
+    affirmationRecorder.stop();
+  }
+
+  function clearAffirmationRecording() {
+    if (affirmationRecorder && affirmationRecorder.state !== "inactive") {
+      discardAffirmationOnStop = true;
+      affirmationStopReason = "Recording cleared.";
+      stopAffirmationRecording();
+      return;
+    }
+    setAffirmationAudio(null);
+    setAffirmationStatus("Recording cleared. You can make a new one anytime.", "neutral");
+    updateAffirmationButtons();
+  }
+
+  function playAffirmationRecording() {
+    const audio = $("#affirmationPlayback");
+    if (!audio || !state.affirmationAudioUrl) {
+      setAffirmationStatus("Record a note first, then play it back here.", "warn");
+      return;
+    }
+    audio.play().catch((err) => {
+      console.error("Playback error:", err);
+      setAffirmationStatus("Playback was blocked by the browser.", "warn");
+    });
+  }
+
+  function questionnaireDraft() {
+    return {
+      mood: Number($("#questionMood")?.value || 3),
+      motivation: Number($("#questionMotivation")?.value || 3),
+      win: $("#questionWin")?.value.trim() || "",
+      blocker: $("#questionBlocker")?.value.trim() || "",
+      commitment: $("#questionCommitment")?.value.trim() || "",
+    };
+  }
+
+  function syncQuestionnaireLabels() {
+    if ($("#questionMoodVal")) $("#questionMoodVal").textContent = $("#questionMood")?.value || "3";
+    if ($("#questionMotivationVal")) $("#questionMotivationVal").textContent = $("#questionMotivation")?.value || "3";
+  }
+
+  function saveQuestionnaireDraft() {
+    const draft = questionnaireDraft();
+    state.questionnaire = draft;
+    localStorage.setItem(QUESTIONNAIRE_STORAGE_KEY, JSON.stringify(draft));
+    const stamp = new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+    if ($("#questionnaireSaved")) $("#questionnaireSaved").textContent = `Answers saved locally at ${stamp}.`;
+  }
+
+  function loadQuestionnaireDraft() {
+    try {
+      const raw = localStorage.getItem(QUESTIONNAIRE_STORAGE_KEY);
+      if (!raw) return;
+      const draft = JSON.parse(raw);
+      if ($("#questionMood")) $("#questionMood").value = String(draft.mood ?? 3);
+      if ($("#questionMotivation")) $("#questionMotivation").value = String(draft.motivation ?? 3);
+      if ($("#questionWin")) $("#questionWin").value = draft.win ?? "";
+      if ($("#questionBlocker")) $("#questionBlocker").value = draft.blocker ?? "";
+      if ($("#questionCommitment")) $("#questionCommitment").value = draft.commitment ?? "";
+      state.questionnaire = draft;
+      if ($("#questionnaireSaved")) $("#questionnaireSaved").textContent = "Loaded your last local reflection draft.";
+    } catch (err) {
+      console.warn("Questionnaire draft load failed:", err);
+    }
+    syncQuestionnaireLabels();
+  }
+
+  function resetQuestionnaire() {
+    localStorage.removeItem(QUESTIONNAIRE_STORAGE_KEY);
+    if ($("#questionMood")) $("#questionMood").value = "3";
+    if ($("#questionMotivation")) $("#questionMotivation").value = "3";
+    if ($("#questionWin")) $("#questionWin").value = "";
+    if ($("#questionBlocker")) $("#questionBlocker").value = "";
+    if ($("#questionCommitment")) $("#questionCommitment").value = "";
+    syncQuestionnaireLabels();
+    if ($("#questionnaireSaved")) $("#questionnaireSaved").textContent = "Answers save locally on this device.";
+    state.questionnaire = null;
+  }
+
+  function resetReflection() {
+    clearAffirmationTimeout();
+    if (affirmationRecorder && affirmationRecorder.state !== "inactive") {
+      discardAffirmationOnStop = true;
+      affirmationStopReason = "Recording cleared.";
+      affirmationRecorder.stop();
+    }
+    stopAffirmationStream();
+    affirmationRecorder = null;
+    affirmationChunks = [];
+    setAffirmationAudio(null);
+    setAffirmationPrompt(0);
+    setAffirmationStatus("No recording yet. Your clip stays in this browser session.", "neutral");
+    updateAffirmationButtons();
+    resetQuestionnaire();
+  }
+
+  function initReflectionTools() {
+    if ($("#affirmationPrompt")) {
+      setAffirmationPrompt(randomAffirmationIndex(-1));
+      setAffirmationStatus("No recording yet. Your clip stays in this browser session.", "neutral");
+      updateAffirmationButtons();
+      $("#shuffleAffirmation")?.addEventListener("click", () => setAffirmationPrompt(randomAffirmationIndex()));
+      $("#recordAffirmation")?.addEventListener("click", startAffirmationRecording);
+      $("#stopAffirmation")?.addEventListener("click", () => {
+        affirmationStopReason = "Recording saved.";
+        stopAffirmationRecording();
+      });
+      $("#playAffirmation")?.addEventListener("click", playAffirmationRecording);
+      $("#clearAffirmation")?.addEventListener("click", clearAffirmationRecording);
+    }
+
+    [
+      "#questionMood",
+      "#questionMotivation",
+      "#questionWin",
+      "#questionBlocker",
+      "#questionCommitment",
+    ].forEach((sel) => {
+      $(sel)?.addEventListener("input", () => {
+        syncQuestionnaireLabels();
+        saveQuestionnaireDraft();
+      });
+    });
+    loadQuestionnaireDraft();
   }
 
   // ── Step 3: render results ───────────────────────────────────────────────────
@@ -1131,6 +1406,10 @@ $("#connectWatch").addEventListener("click", () => {
       weightPlan: null,
       prediction: null,
       syncedHealth: null,
+      affirmationPromptIndex: 0,
+      affirmationAudioUrl: null,
+      affirmationAudioBlob: null,
+      questionnaire: null,
     });
     $("#selfieInput").value       = "";
     $("#selfiePreview").innerHTML = "";
@@ -1176,9 +1455,12 @@ $("#connectWatch").addEventListener("click", () => {
     $("#scienceCard").innerHTML    = "";
     $("#progressBars").innerHTML   = "";
     setTodayInputs();
+    resetReflection();
 
     showStep(1);
   });
+
+  $("#restartFromReflection").addEventListener("click", () => $("#restart").click());
 
   // ── API key save ─────────────────────────────────────────────────────────────
   const hasKeys = sessionStorage.getItem("openaiKey") || sessionStorage.getItem("tencentId");
@@ -1201,4 +1483,6 @@ $("#connectWatch").addEventListener("click", () => {
     if (akey) { sessionStorage.setItem("anthropicKey", akey); $("#anthropicKey").value = ""; }
     $("#keyStatus").textContent = "Keys saved for this session.";
   });
+
+  initReflectionTools();
 })();

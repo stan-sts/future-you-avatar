@@ -3,20 +3,22 @@
 (function (global) {
   const IDEAL = {
     sleep: 8, exercise: 5, water: 8, steps: 10000,
-    diet: 8, stress: 3, smoking: 0, alcohol: 3
+    diet: 8, stress: 3, smoking: 0, alcohol: 3, screenTime: 2
   };
 
   function healthScore(h) {
-    const sleepScore    = clamp01(1 - Math.abs(h.sleep - IDEAL.sleep) / 4) * 15;
-    const exerciseScore = clamp01(h.exercise / IDEAL.exercise) * 18;
-    const waterScore    = clamp01(h.water / IDEAL.water) * 8;
-    const stepsScore    = clamp01(h.steps / IDEAL.steps) * 12;
-    const dietScore     = clamp01(h.diet / IDEAL.diet) * 15;
-    const stressScore   = clamp01(1 - (h.stress - IDEAL.stress) / 7) * 12;
-    const smokingScore  = clamp01(1 - h.smoking / 20) * 12;
-    const alcoholScore  = clamp01(1 - Math.max(0, h.alcohol - IDEAL.alcohol) / 14) * 8;
+    // Weights sum to 100
+    const sleepScore      = clamp01(1 - Math.abs(h.sleep - IDEAL.sleep) / 4) * 14;
+    const exerciseScore   = clamp01(h.exercise / IDEAL.exercise) * 16;
+    const waterScore      = clamp01(h.water / IDEAL.water) * 7;
+    const stepsScore      = clamp01(h.steps / IDEAL.steps) * 11;
+    const dietScore       = clamp01(h.diet / IDEAL.diet) * 13;
+    const stressScore     = clamp01(1 - (h.stress - IDEAL.stress) / 7) * 11;
+    const smokingScore    = clamp01(1 - h.smoking / 20) * 11;
+    const alcoholScore    = clamp01(1 - Math.max(0, h.alcohol - IDEAL.alcohol) / 14) * 7;
+    const screenTimeScore = clamp01(1 - Math.max(0, (h.screenTime ?? 4) - IDEAL.screenTime) / 12) * 10;
     return Math.round(sleepScore + exerciseScore + waterScore + stepsScore +
-                      dietScore + stressScore + smokingScore + alcoholScore);
+                      dietScore + stressScore + smokingScore + alcoholScore + screenTimeScore);
   }
 
   function clamp01(x) { return Math.max(0, Math.min(1, x)); }
@@ -33,6 +35,7 @@
       stress: IDEAL.stress,
       smoking: IDEAL.smoking,
       alcohol: IDEAL.alcohol,
+      screenTime: IDEAL.screenTime,
     };
   }
 
@@ -87,7 +90,7 @@
 
   function scenarioAvatarPrompt(habits, goalInfo, scenario, goalHabits) {
     const goals = goalHabits || IDEAL;
-    const base = 'DSLR photograph of the exact same real person from the reference photo — identical clothing, identical body, full body head to toe, standing confidently on a plain white background';
+    const base = 'DSLR photograph of the exact same person from the reference photo — identical clothing, identical body, full body head to toe, standing confidently on a plain white background';
     const camera = 'High-end beauty photography, shot on Canon EOS R5, 85mm f/1.4, soft studio lighting. Skin looks real with natural texture, not plastic. NO illustration, NO anime, NO cartoon, NO painting, NO 3D render, NO CGI, NO digital art.';
 
     if (scenario === "same") {
@@ -103,6 +106,7 @@
       if (habits.alcohol > 3) currentPath.push('a touch of facial puffiness or redness');
       if (habits.exercise < 4) currentPath.push('less athletic energy and less physical vitality');
       if (habits.diet < 7) currentPath.push('skin texture looks more uneven');
+      if ((habits.screenTime ?? 4) > 6) currentPath.push('strained eyes, subtle digital fatigue visible around the eyes, slightly dull unfocused gaze');
 
       const desc = currentPath.length
         ? currentPath.join(', ')
@@ -111,7 +115,7 @@
       return `${base}. This person looks like the realistic outcome of keeping mostly the same habits for 6 months: ${desc}. Keep the person recognizable and real, not glamorized, not idealized, not harshly unhealthy, just plausibly a slightly more fatigued or unchanged version of the same person. ${camera}`;
     }
 
-    // "improve" scenario: describe appearance after living with the user's own goal habits
+    // "improve" scenario
     const improvements = [];
     if (goalInfo.kgToLose > 10) improvements.push('visibly leaner face, strikingly defined cheekbones, sharp jawline, noticeably slimmer facial structure');
     else if (goalInfo.kgToLose > 3) improvements.push('clearly leaner face, noticeably more defined jawline and cheekbones');
@@ -122,6 +126,7 @@
     if (goals.alcohol <= 3 && habits.alcohol > 3) improvements.push('no facial redness or puffiness, clean sculpted features, noticeably reduced bloating');
     if (goals.exercise >= 4) improvements.push('vibrant healthy athletic glow, energetic alive look, noticeably more toned and fit appearance, natural rosy flush');
     if (goals.diet >= 7) improvements.push('visibly clearer brighter skin, even healthy colour throughout, smooth refined texture');
+    if ((goals.screenTime ?? 4) <= 3 && (habits.screenTime ?? 4) > 5) improvements.push('eyes look noticeably more rested and alert, sharp focused gaze, no digital eye strain or fatigue');
 
     const desc = improvements.length ? improvements.join(', ') : 'striking luminous glowing skin, bright captivating eyes, radiant well-rested energetic look';
     return `${base}. This person looks noticeably healthier and more attractive than in the reference photo: ${desc}. The improvement must be clearly visible and striking — like a real before-and-after transformation — while still looking like the same real person, not retouched or fake. ${camera}`;

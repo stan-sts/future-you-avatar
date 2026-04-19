@@ -35,13 +35,14 @@ let latestHealthData = null;
 
 // iOS companion app POSTs data here
 app.post('/api/health-sync', (req, res) => {
-  const { sleep, exercise, water, steps, diet, stress, smoking, alcohol, heartRate, history } = req.body;
+  const { sleep, exercise, water, steps, screenTime, diet, stress, smoking, alcohol, heartRate, history } = req.body;
   if (sleep == null || steps == null) return res.status(400).json({ error: 'Missing fields' });
   latestHealthData = {
     sleep,
     exercise,
     water,
     steps,
+    screenTime: screenTime ?? null,
     diet,
     stress,
     smoking,
@@ -64,7 +65,7 @@ app.get('/api/health-sync', (req, res) => {
 function buildK2MetaPrompt(habits, goalHabits, scenario, goalInfo) {
   const fmt = h =>
     `sleep ${h.sleep}h/night, exercise ${h.exercise} days/week, water ${h.water} glasses/day, ` +
-    `${h.steps} steps/day, diet ${h.diet}/10, stress ${h.stress}/10, ` +
+    `${h.steps} steps/day, screen time ${h.screenTime ?? 0}h/day, diet ${h.diet}/10, stress ${h.stress}/10, ` +
     `smoking ${h.smoking} cigs/day, alcohol ${h.alcohol} drinks/week`;
 
   const PREFIX = 'DSLR photograph of the exact same real person from the reference photo — identical clothing, identical body, full body head to toe, standing confidently on a plain white background';
@@ -75,8 +76,8 @@ function buildK2MetaPrompt(habits, goalHabits, scenario, goalInfo) {
 
 Here is an example of the exact format and style required:
 
-EXAMPLE INPUT: sleep 5h/night, exercise 1 days/week, water 3 glasses/day, 4000 steps/day, diet 4/10, stress 8/10, smoking 0 cigs/day, alcohol 5 drinks/week. Weight context: wants to lose 4 kg but has not changed habits.
-EXAMPLE OUTPUT: ${PREFIX}. This person looks like the realistic outcome of keeping mostly the same habits for 6 months: face still looks slightly fuller with only minimal jaw definition, mild dark circles, faint under-eye puffiness, slightly tired eyes, skin looks a little dry and less luminous, subtle tension in the forehead and expression, a touch of facial puffiness or redness. Keep the person recognizable and real, not glamorized, not idealized, not harshly unhealthy, just plausibly a slightly more fatigued or unchanged version of the same person. ${SUFFIX}
+EXAMPLE INPUT: sleep 5h/night, exercise 1 days/week, water 3 glasses/day, 4000 steps/day, screen time 8h/day, diet 4/10, stress 8/10, smoking 0 cigs/day, alcohol 5 drinks/week. Weight context: wants to lose 4 kg but has not changed habits.
+EXAMPLE OUTPUT: ${PREFIX}. This person looks like the realistic outcome of keeping mostly the same habits for 6 months: face still looks slightly fuller with only minimal jaw definition, mild dark circles, faint under-eye puffiness, slightly tired eyes, skin looks a little dry and less luminous, subtle tension in the forehead and expression, a touch of facial puffiness or redness, slight digital fatigue around the eyes with a duller gaze. Keep the person recognizable and real, not glamorized, not idealized, not harshly unhealthy, just plausibly a slightly more fatigued or unchanged version of the same person. ${SUFFIX}
 
 Now generate a prompt for this person:
 
@@ -86,7 +87,7 @@ Weight context: ${goalInfo.kgToLose > 0 ? `person wants to lose ${goalInfo.kgToL
 Rules:
 - Use the exact same sentence structure and style as the example output above
 - Start with: "${PREFIX}."
-- Describe realistic appearance after 6 months of THESE specific habits (low sleep → dark circles/puffiness, high stress → tension lines, low water → dry dull skin, smoking → dull skin, high alcohol → facial puffiness, low exercise → less vitality, low diet → uneven texture)
+- Describe realistic appearance after 6 months of THESE specific habits (low sleep → dark circles/puffiness, high stress → tension lines, low water → dry dull skin, smoking → dull skin, high alcohol → facial puffiness, low exercise → less vitality, high screen time → tired or strained eyes, low diet → uneven texture)
 - End with: "${SUFFIX}"
 - Return ONLY the prompt text, no preamble, no explanation, no markdown`;
   }
@@ -98,8 +99,8 @@ The goal is a realistic but CLEARLY VISIBLE before-and-after transformation. The
 
 Here is an example of the exact format and style required:
 
-EXAMPLE INPUT: Current habits: sleep 5h/night, exercise 1 days/week, water 3 glasses/day, 4000 steps/day, diet 4/10, stress 8/10. Goal habits: sleep 8h/night, exercise 5 days/week, water 8 glasses/day, 10000 steps/day, diet 8/10, stress 3/10. Weight goal: lose 4 kg.
-EXAMPLE OUTPUT: ${PREFIX}. This person looks noticeably healthier and more attractive than before: clearly leaner face, strikingly more defined jawline and cheekbones, zero dark circles, strikingly bright wide-awake eyes with a deeply rested luminous glow, visibly deeply hydrated plump bouncy skin with natural dewy luminosity, completely smooth forehead with no tension lines, calm radiant confident expression, vibrant healthy athletic glow with natural rosy flush, visibly clearer brighter even skin throughout. The improvement is clearly visible and striking — like a real before-and-after transformation — while still looking like the same real person. ${SUFFIX}
+EXAMPLE INPUT: Current habits: sleep 5h/night, exercise 1 days/week, water 3 glasses/day, 4000 steps/day, screen time 8h/day, diet 4/10, stress 8/10. Goal habits: sleep 8h/night, exercise 5 days/week, water 8 glasses/day, 10000 steps/day, screen time 2h/day, diet 8/10, stress 3/10. Weight goal: lose 4 kg.
+EXAMPLE OUTPUT: ${PREFIX}. This person looks noticeably healthier and more attractive than before: clearly leaner face, strikingly more defined jawline and cheekbones, zero dark circles, strikingly bright wide-awake eyes with a deeply rested luminous glow, visibly deeply hydrated plump bouncy skin with natural dewy luminosity, completely smooth forehead with no tension lines, calm radiant confident expression, vibrant healthy athletic glow with natural rosy flush, visibly clearer brighter even skin throughout, eyes that look sharper more rested and less digitally strained. The improvement is clearly visible and striking — like a real before-and-after transformation — while still looking like the same real person. ${SUFFIX}
 
 Now generate a prompt for this person:
 
@@ -110,7 +111,7 @@ Weight goal: ${goalInfo.kgToLose > 0 ? `lose ${goalInfo.kgToLose} kg` : 'maintai
 Rules:
 - Use the exact same sentence structure and style as the example output above
 - Start with: "${PREFIX}."
-- Be SPECIFIC and VIVID about each visible change from the goal habits — use strong descriptive words (strikingly, visibly, noticeably, zero, completely). Good sleep → zero dark circles, strikingly bright eyes. High water → visibly plump dewy glowing skin. Low stress → completely smooth forehead, radiant expression. Exercise → healthy vibrant athletic glow. Good diet → clear even bright skin. Weight loss → strikingly leaner face and sharper jaw.
+- Be SPECIFIC and VIVID about each visible change from the goal habits — use strong descriptive words (strikingly, visibly, noticeably, zero, completely). Good sleep → zero dark circles, strikingly bright eyes. High water → visibly plump dewy glowing skin. Low stress → completely smooth forehead, radiant expression. Exercise → healthy vibrant athletic glow. Lower screen time → more rested, focused, less strained eyes. Good diet → clear even bright skin. Weight loss → strikingly leaner face and sharper jaw.
 - End with: "The improvement is clearly visible and striking — like a real before-and-after transformation — while still looking like the same real person. ${SUFFIX}"
 - Return ONLY the prompt text, no preamble, no explanation, no markdown`;
 }

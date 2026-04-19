@@ -57,7 +57,7 @@ Speak to me as Future Me.`;
 
   function habitsLine(h) {
     return `sleep ${h.sleep}h, exercise ${h.exercise}d/wk, water ${h.water} glasses, ` +
-      `${h.steps} steps/d, diet ${h.diet}/10, stress ${h.stress}/10, ` +
+      `${h.steps} steps/d, screen time ${h.screenTime ?? 0}h/d, diet ${h.diet}/10, stress ${h.stress}/10, ` +
       `${h.smoking} cigs/d, ${h.alcohol} drinks/wk`;
   }
 
@@ -84,6 +84,7 @@ Speak to me as Future Me.`;
       { label: "exercise", gap: (5 - h.exercise) / 5 },
       { label: "water",    gap: (8 - h.water) / 8 },
       { label: "steps",    gap: (10000 - h.steps) / 10000 },
+      { label: "screen-time balance", gap: Math.max(0, (h.screenTime ?? 2) - 2) / 10 },
       { label: "diet",     gap: (8 - h.diet) / 8 },
       { label: "stress",   gap: (h.stress - 3) / 7 },
       { label: "smoking",  gap: h.smoking / 20 },
@@ -99,6 +100,7 @@ Speak to me as Future Me.`;
       { label: "exercise", s: h.exercise / 5 },
       { label: "hydration",s: h.water / 8 },
       { label: "steps",    s: h.steps / 10000 },
+      { label: "screen-time boundaries", s: 1 - Math.max(0, (h.screenTime ?? 2) - 2) / 10 },
       { label: "diet",     s: h.diet / 10 },
       { label: "calm",     s: 1 - h.stress / 10 },
     ];
