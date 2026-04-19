@@ -2,6 +2,7 @@
   const state = {
     selfieDataUrl: null,
     habits: null,
+    goalHabits: null,
     goals: null,
     weightPlan: null,
     prediction: null,
@@ -18,6 +19,8 @@
       loadingId: "sameFutureLoading",
       loadingTextId: "sameFutureLoadingText",
       modelId: "sameFutureModel",
+      img2dId: "same2dImg",
+      toggleId: "sameViewToggle",
       coachId: "sameFutureCoach",
       scenario: "same",
       loadingLabel: "Generating current-path face…",
@@ -27,6 +30,8 @@
       loadingId: "idealFutureLoading",
       loadingTextId: "idealFutureLoadingText",
       modelId: "idealFutureModel",
+      img2dId: "ideal2dImg",
+      toggleId: "idealViewToggle",
       coachId: "idealFutureCoach",
       scenario: "improve",
       loadingLabel: "Generating ideal future face…",
@@ -34,7 +39,20 @@
     },
   };
 
-  // ── Habit slider config ──────────────────────────────────────────────────────
+  // ── Habit slider configs ─────────────────────────────────────────────────────
+  const GOAL_HABIT_DEFAULTS = { gSleep: 8, gExercise: 5, gWater: 8, gSteps: 10000, gDiet: 8, gStress: 3, gSmoking: 0, gAlcohol: 3 };
+
+  const GOAL_HABITS = [
+    { id: "gSleep",    optimal: 8,     max: 12,    invert: false, fmt: v => v },
+    { id: "gExercise", optimal: 5,     max: 7,     invert: false, fmt: v => v },
+    { id: "gWater",    optimal: 8,     max: 20,    invert: false, fmt: v => v },
+    { id: "gSteps",    optimal: 10000, max: 30000, invert: false, fmt: v => Number(v).toLocaleString() },
+    { id: "gDiet",     optimal: 8,     max: 10,    invert: false, fmt: v => v },
+    { id: "gStress",   optimal: 3,     max: 10,    invert: true,  fmt: v => v },
+    { id: "gSmoking",  optimal: 0,     max: 40,    invert: true,  fmt: v => v },
+    { id: "gAlcohol",  optimal: 0,     max: 40,    invert: true,  fmt: v => v },
+  ];
+
   const HABITS = [
     { id: "sleep",    optimal: 8,     max: 12,    invert: false, fmt: v => v },
     { id: "exercise", optimal: 5,     max: 7,     invert: false, fmt: v => v },
@@ -85,6 +103,16 @@
     });
   }
   initSliders();
+
+  function initGoalSliders() {
+    GOAL_HABITS.forEach(cfg => {
+      const input = document.getElementById(cfg.id);
+      if (!input) return;
+      updateSlider(cfg, input.value, false);
+      input.addEventListener("input", () => updateSlider(cfg, input.value, false));
+    });
+  }
+  initGoalSliders();
 
   function round1(value) {
     return Math.round(Number(value || 0) * 10) / 10;
@@ -397,7 +425,8 @@
   function stepAvailable(step) {
     if (step === 1) return true;
     if (step === 2) return Boolean(state.selfieDataUrl);
-    if (step === 3) return Boolean(state.prediction);
+    if (step === 3) return Boolean(state.selfieDataUrl);
+    if (step === 4) return Boolean(state.prediction);
     return false;
   }
 
@@ -461,17 +490,20 @@
 
   $("#toStep2").addEventListener("click", () => showStep(2));
   $("#back1").addEventListener("click",   () => showStep(1));
+  $("#toStep3").addEventListener("click", () => showStep(3));
   $("#back2").addEventListener("click",   () => showStep(2));
+  $("#back3").addEventListener("click",   () => showStep(3));
 
-  // ── Step 2: predict ──────────────────────────────────────────────────────────
-  $("#predict").addEventListener("click", async () => {
-    state.habits     = readHabits();
-    state.goals      = readGoals();
-    state.prediction = Predictor.predictBoth(state.habits);
-    state.weightPlan = Predictor.calculateWeightPlan(
+  // ── Step 3: generate ─────────────────────────────────────────────────────────
+  $("#generate").addEventListener("click", async () => {
+    state.habits      = readHabits();
+    state.goalHabits  = readGoalHabits();
+    state.goals       = readGoals();
+    state.prediction  = Predictor.predictBoth(state.habits, state.goalHabits);
+    state.weightPlan  = Predictor.calculateWeightPlan(
       state.goals.currentWeight, state.goals.targetWeight, state.goals.months
     );
-    showStep(3);
+    showStep(4);
     renderFutureResults();
     await Promise.all([
       generateComparisonAvatars(),
@@ -484,6 +516,19 @@
       ["sleep", "exercise", "water", "steps", "diet", "stress", "smoking", "alcohol"]
         .map(f => [f, Number($("#" + f).value)])
     );
+  }
+
+  function readGoalHabits() {
+    return {
+      sleep:    Number($("#gSleep").value),
+      exercise: Number($("#gExercise").value),
+      water:    Number($("#gWater").value),
+      steps:    Number($("#gSteps").value),
+      diet:     Number($("#gDiet").value),
+      stress:   Number($("#gStress").value),
+      smoking:  Number($("#gSmoking").value),
+      alcohol:  Number($("#gAlcohol").value),
+    };
   }
 
   function readGoals() {
@@ -898,12 +943,33 @@
   async function generateScenarioAvatar(kind) {
     const cfg = AVATAR_SCENARIOS[kind];
     const goalInfo = { kgToLose: Math.max(0, state.goals.currentWeight - state.goals.targetWeight) };
-    const prompt = Predictor.scenarioAvatarPrompt(state.habits, goalInfo, cfg.scenario);
     const userKeys = avatarUserKeys();
+
+    // Try K2 Think for a richer prompt; fall back to rule-based if it fails
+    let prompt;
+    try {
+      const k2Res = await fetch("/api/generate-prompt", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          habits: state.habits,
+          goalHabits: state.goalHabits,
+          scenario: cfg.scenario,
+          goalInfo,
+        }),
+      });
+      if (!k2Res.ok) throw new Error(`K2 ${k2Res.status}`);
+      ({ prompt } = await k2Res.json());
+    } catch {
+      prompt = Predictor.scenarioAvatarPrompt(state.habits, goalInfo, cfg.scenario, state.goalHabits);
+    }
     const loadingEl = document.getElementById(cfg.loadingId);
     const loadTextEl = document.getElementById(cfg.loadingTextId);
     const modelEl = document.getElementById(cfg.modelId);
+    const img2dEl = document.getElementById(cfg.img2dId);
+    const toggleEl = document.getElementById(cfg.toggleId);
 
+    let modifiedImage = null;
     try {
       if (loadTextEl) loadTextEl.textContent = cfg.loadingLabel;
 
@@ -913,8 +979,10 @@
         body: JSON.stringify({ image: state.selfieDataUrl, prompt, ...userKeys }),
       });
       if (!res2d.ok) throw new Error(`2D generation failed: ${res2d.status}`);
-      const { image: modifiedImage } = await res2d.json();
+      ({ image: modifiedImage } = await res2d.json());
 
+      // Store 2D image for toggle
+      if (img2dEl) img2dEl.src = modifiedImage;
       loadingEl.innerHTML = `<img src="${modifiedImage}" style="max-width:100%;border-radius:8px" /><p style="font-size:12px;color:#888">${cfg.previewLabel}</p>`;
 
       const res3d = await fetch("/api/generate-avatar", {
@@ -930,10 +998,26 @@
       loadingEl.style.display = "none";
       modelEl.setAttribute("src", `/api/proxy-model?url=${encodeURIComponent(modelUrl)}`);
       modelEl.addEventListener("error", (e) => console.error("model-viewer error:", e), { once: true });
+
+      // Show 2D/3D toggle now that both are available
+      if (toggleEl) toggleEl.classList.remove("hidden");
     } catch (err) {
       console.error(`${kind} future avatar error:`, err);
-      loadingEl.innerHTML =
-        `<p class="hint avatar-error">Generation unavailable.<br><small>${err.message}</small></p>`;
+      if (modifiedImage && img2dEl) {
+        // 3D failed but 2D succeeded — show 2D directly
+        loadingEl.style.display = "none";
+        img2dEl.classList.remove("hidden");
+        if (toggleEl) {
+          toggleEl.classList.remove("hidden");
+          const btn3d = toggleEl.querySelector('[data-view="3d"]');
+          if (btn3d) { btn3d.disabled = true; btn3d.classList.remove("active"); }
+          const btn2d = toggleEl.querySelector('[data-view="2d"]');
+          if (btn2d) btn2d.classList.add("active");
+        }
+      } else {
+        loadingEl.innerHTML =
+          `<p class="hint avatar-error">Generation unavailable.<br><small>${err.message}</small></p>`;
+      }
     }
   }
 
@@ -989,6 +1073,31 @@
     ]);
   }
 
+  // ── 2D / 3D view toggle ──────────────────────────────────────────────────────
+  document.addEventListener("click", (e) => {
+    const btn = e.target.closest(".view-btn");
+    if (!btn || btn.disabled) return;
+    const target = btn.dataset.target; // "same" or "ideal"
+    const view   = btn.dataset.view;   // "2d" or "3d"
+    const cfg    = AVATAR_SCENARIOS[target === "same" ? "same" : "improve"];
+    if (!cfg) return;
+
+    const modelEl  = document.getElementById(cfg.modelId);
+    const img2dEl  = document.getElementById(cfg.img2dId);
+    const toggleEl = document.getElementById(cfg.toggleId);
+
+    toggleEl?.querySelectorAll(".view-btn").forEach(b => b.classList.remove("active"));
+    btn.classList.add("active");
+
+    if (view === "3d") {
+      if (modelEl) modelEl.style.display = "block";
+      if (img2dEl) img2dEl.classList.add("hidden");
+    } else {
+      if (modelEl) modelEl.style.display = "none";
+      if (img2dEl) img2dEl.classList.remove("hidden");
+    }
+  });
+
   // ── Speak button ─────────────────────────────────────────────────────────────
   document.addEventListener("click", (e) => {
     const btn = e.target.closest(".speak");
@@ -1019,6 +1128,7 @@
     Object.assign(state, {
       selfieDataUrl: null,
       habits: null,
+      goalHabits: null,
       goals: null,
       weightPlan: null,
       prediction: null,
@@ -1038,13 +1148,32 @@
 
     Object.values(AVATAR_SCENARIOS).forEach(cfg => {
       const loadingEl = document.getElementById(cfg.loadingId);
-      const modelEl = document.getElementById(cfg.modelId);
-      const coachEl = document.getElementById(cfg.coachId);
+      const modelEl   = document.getElementById(cfg.modelId);
+      const coachEl   = document.getElementById(cfg.coachId);
+      const img2dEl   = document.getElementById(cfg.img2dId);
+      const toggleEl  = document.getElementById(cfg.toggleId);
       loadingEl.innerHTML = spinnerMarkup(cfg.loadingTextId, cfg.loadingLabel);
       loadingEl.style.display = "";
       modelEl.removeAttribute("src");
       modelEl.style.display = "none";
       coachEl.textContent = "Loading coach…";
+      if (img2dEl) { img2dEl.src = ""; img2dEl.classList.add("hidden"); }
+      if (toggleEl) {
+        toggleEl.classList.add("hidden");
+        toggleEl.querySelectorAll(".view-btn").forEach((b, i) => {
+          b.disabled = false;
+          b.classList.toggle("active", i === 0);
+        });
+      }
+    });
+
+    // Reset goal sliders to defaults
+    GOAL_HABITS.forEach(cfg => {
+      const input = document.getElementById(cfg.id);
+      if (input) {
+        input.value = GOAL_HABIT_DEFAULTS[cfg.id];
+        updateSlider(cfg, GOAL_HABIT_DEFAULTS[cfg.id], false);
+      }
     });
     $("#scienceCard").innerHTML    = "";
     $("#progressBars").innerHTML   = "";

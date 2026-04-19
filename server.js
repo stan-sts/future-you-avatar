@@ -60,6 +60,79 @@ app.get('/api/health-sync', (req, res) => {
   res.json({ data: latestHealthData });
 });
 
+// ── K2 Think: generate image prompt from habits ───────────────────────────────
+function buildK2MetaPrompt(habits, goalHabits, scenario, goalInfo) {
+  const fmt = h =>
+    `sleep ${h.sleep}h/night, exercise ${h.exercise} days/week, water ${h.water} glasses/day, ` +
+    `${h.steps} steps/day, diet ${h.diet}/10, stress ${h.stress}/10, ` +
+    `smoking ${h.smoking} cigs/day, alcohol ${h.alcohol} drinks/week`;
+
+  const PREFIX = 'DSLR photograph of the exact same real person from the reference photo — identical clothing, identical body, full body head to toe, standing confidently on a plain white background.';
+  const SUFFIX = 'High-end beauty photography, shot on Canon EOS R5, 85mm f/1.4, soft studio lighting. Skin looks real with natural texture, not plastic. NO illustration, NO anime, NO cartoon, NO painting, NO 3D render, NO CGI, NO digital art.';
+
+  if (scenario === 'same') {
+    return `You are an expert photorealistic portrait prompt engineer for AI image generation.
+
+Generate a prompt describing a person after 6 months of maintaining their CURRENT habits unchanged.
+
+Current habits: ${fmt(habits)}
+Weight context: ${goalInfo.kgToLose > 0 ? `person wants to lose ${goalInfo.kgToLose} kg but has not changed habits` : 'maintaining weight'}
+
+Rules:
+- Start with exactly: "${PREFIX}"
+- Describe realistic appearance after 6 months of these habits. Low sleep → dark circles. High stress → tension lines. Low water → dry skin. Smoking → dull skin. High alcohol → puffiness. Low exercise → less vitality. Be specific and realistic, not harsh.
+- End with exactly: "${SUFFIX}"
+- Return ONLY the prompt, no explanation, no markdown.`;
+  }
+
+  const goalsDesc = goalHabits ? fmt(goalHabits) : 'optimal healthy habits';
+  return `You are an expert photorealistic portrait prompt engineer for AI image generation.
+
+Generate a prompt describing a person after 6 months of achieving their GOAL habits.
+
+Current habits: ${fmt(habits)}
+Goal habits: ${goalsDesc}
+Weight goal: ${goalInfo.kgToLose > 0 ? `lose ${goalInfo.kgToLose} kg` : 'maintain weight'}
+
+Rules:
+- Start with exactly: "${PREFIX}"
+- Describe realistic positive appearance changes from achieving the goal habits. Better sleep → bright eyes, no dark circles. More water → hydrated glowing skin. Lower stress → relaxed expression. More exercise → healthy glow. Better diet → even skin tone. Weight loss → leaner face. Be specific.
+- End with exactly: "${SUFFIX}"
+- Return ONLY the prompt, no explanation, no markdown.`;
+}
+
+app.post('/api/generate-prompt', wrap(async (req, res) => {
+  const { habits, goalHabits, scenario, goalInfo, k2Key } = req.body;
+  const apiKey = k2Key || process.env.K2_THINK_KEY;
+  if (!apiKey) return res.status(400).json({ error: 'K2 Think API key not configured' });
+
+  const response = await fetch('https://api.k2think.ai/v1/chat/completions', {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${apiKey}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      model: 'MBZUAI-IFM/K2-Think-v2',
+      messages: [
+        { role: 'user', content: buildK2MetaPrompt(habits, goalHabits, scenario, goalInfo) },
+      ],
+      stream: false,
+    }),
+  });
+
+  if (!response.ok) {
+    const err = await response.text();
+    throw new Error(`K2 Think error ${response.status}: ${err}`);
+  }
+
+  const data = await response.json();
+  const prompt = data.choices?.[0]?.message?.content?.trim();
+  if (!prompt) throw new Error('No prompt returned by K2 Think');
+  console.log(`K2 prompt (${scenario}):`, prompt.slice(0, 120) + '…');
+  res.json({ prompt });
+}));
+
 app.post('/api/generate-2d', wrap(async (req, res) => {
   const { image, prompt, googleKey } = req.body;
   if (!image || !prompt) return res.status(400).json({ error: 'image and prompt are required' });

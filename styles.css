@@ -1932,3 +1932,44 @@ model-viewer {
     grid-template-columns: 1fr;
   }
 }
+
+/* ── 2D / 3D view toggle ────────────────────────────────────────────────────── */
+.avatar-view-toggle {
+  display: flex;
+  gap: 6px;
+  margin-bottom: 8px;
+}
+.view-btn {
+  flex: 1;
+  padding: 6px 10px;
+  border: 1px solid var(--border);
+  background: transparent;
+  color: var(--fg);
+  cursor: pointer;
+  border-radius: 6px;
+  font-size: 11px;
+  font-family: inherit;
+  font-weight: 600;
+  letter-spacing: 0.03em;
+  transition: background 0.15s, color 0.15s, border-color 0.15s;
+}
+.view-btn:hover:not(:disabled) {
+  border-color: var(--volt);
+}
+.view-btn.active {
+  background: var(--volt);
+  color: #000;
+  border-color: var(--volt);
+}
+.view-btn:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+.avatar-2d-img {
+  width: 100%;
+  border-radius: 8px;
+  display: block;
+}
+.avatar-2d-img.hidden {
+  display: none;
+}

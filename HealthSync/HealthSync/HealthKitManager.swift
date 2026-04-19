@@ -1,6 +1,10 @@
 import HealthKit
 import Foundation
 
+private extension Int {
+    func toDouble() -> Double { Double(self) }
+}
+
 struct DailyHealthSample: Codable {
     var date: String
     var sleep: Double
@@ -61,17 +65,19 @@ class HealthKitManager: ObservableObject {
 
     // Active energy last 7 days → estimate exercise days (>300 kcal = active day)
     func exerciseDaysPerWeek() async -> Double {
-        var active = 0.0
-        for offset in 0..<7 {
-            let cal   = Calendar.current
-            let day   = cal.date(byAdding: .day, value: -offset, to: Date())!
-            let start = cal.startOfDay(for: day)
-            let end   = cal.date(byAdding: .day, value: 1, to: start)!
-            let kcal  = await querySum(.activeEnergyBurned, unit: .kilocalorie(),
-                                       start: start, end: end)
-            if kcal >= 300 { active += 1 }
+        let cal = Calendar.current
+        let results: [Double] = await withTaskGroup(of: Double.self) { group in
+            for offset in 0..<7 {
+                let day   = cal.date(byAdding: .day, value: -offset, to: Date())!
+                let start = cal.startOfDay(for: day)
+                let end   = cal.date(byAdding: .day, value: 1, to: start)!
+                group.addTask { await self.querySum(.activeEnergyBurned, unit: .kilocalorie(), start: start, end: end) }
+            }
+            var all: [Double] = []
+            for await v in group { all.append(v) }
+            return all
         }
-        return active
+        return results.filter { $0 >= 300 }.count.toDouble()
     }
 
     // Average resting heart rate → proxy for stress (high HR = high stress)
@@ -106,24 +112,32 @@ class HealthKitManager: ObservableObject {
         let sleepMap = await sleepHistory(days: 7)
         let heartRateMap = await heartRateHistory(days: 7)
 
-        var days: [DailyHealthSample] = []
-        for offset in stride(from: 6, through: 0, by: -1) {
-            let day = cal.date(byAdding: .day, value: -offset, to: Date())!
-            let start = cal.startOfDay(for: day)
-            let end = cal.date(byAdding: .day, value: 1, to: start)!
-            let steps = await querySum(.stepCount, unit: .count(), start: start, end: end)
-            let activeEnergy = await querySum(.activeEnergyBurned, unit: .kilocalorie(), start: start, end: end)
+        let samples: [(Date, Double, Double)] = await withTaskGroup(of: (Date, Double, Double).self) { group in
+            for offset in stride(from: 6, through: 0, by: -1) {
+                let day   = cal.date(byAdding: .day, value: -offset, to: Date())!
+                let start = cal.startOfDay(for: day)
+                let end   = cal.date(byAdding: .day, value: 1, to: start)!
+                group.addTask {
+                    async let steps  = self.querySum(.stepCount, unit: .count(), start: start, end: end)
+                    async let energy = self.querySum(.activeEnergyBurned, unit: .kilocalorie(), start: start, end: end)
+                    return (start, await steps, await energy)
+                }
+            }
+            var all: [(Date, Double, Double)] = []
+            for await v in group { all.append(v) }
+            return all.sorted { $0.0 < $1.0 }
+        }
 
-            days.append(DailyHealthSample(
+        return samples.map { (start, steps, activeEnergy) in
+            DailyHealthSample(
                 date: formatter.string(from: start),
                 sleep: sleepMap[start] ?? 0,
                 steps: steps,
                 activeEnergy: activeEnergy,
                 heartRate: heartRateMap[start],
                 workoutMetGoal: activeEnergy >= 300
-            ))
+            )
         }
-        return days
     }
 
     // ── Helpers ─────────────────────────────────────────────────────────────────
@@ -163,19 +177,18 @@ class HealthKitManager: ObservableObject {
 
     private func heartRateHistory(days: Int) async -> [Date: Double] {
         let cal = Calendar.current
-        var buckets: [Date: Double] = [:]
-
-        for offset in stride(from: days - 1, through: 0, by: -1) {
-            let day = cal.date(byAdding: .day, value: -offset, to: Date())!
-            let start = cal.startOfDay(for: day)
-            let end = cal.date(byAdding: .day, value: 1, to: start)!
-            let avg = await queryAverage(.heartRate, unit: HKUnit.count().unitDivided(by: .minute()), start: start, end: end)
-            if avg > 0 {
-                buckets[start] = avg
+        let unit = HKUnit.count().unitDivided(by: .minute())
+        return await withTaskGroup(of: (Date, Double).self) { group in
+            for offset in stride(from: days - 1, through: 0, by: -1) {
+                let day   = cal.date(byAdding: .day, value: -offset, to: Date())!
+                let start = cal.startOfDay(for: day)
+                let end   = cal.date(byAdding: .day, value: 1, to: start)!
+                group.addTask { (start, await self.queryAverage(.heartRate, unit: unit, start: start, end: end)) }
             }
+            var buckets: [Date: Double] = [:]
+            for await (date, avg) in group where avg > 0 { buckets[date] = avg }
+            return buckets
         }
-
-        return buckets
     }
 
     private func querySum(_ id: HKQuantityTypeIdentifier, unit: HKUnit,

@@ -55,11 +55,11 @@
     };
   }
 
-  function predictBoth(habits) {
+  function predictBoth(habits, goalHabits) {
     const same = project(habits, "same");
-    const ideal = idealHabits();
-    const improve = project(ideal, "improve");
-    return { same, improve, improvedHabits: ideal };
+    const goals = goalHabits || idealHabits();
+    const improve = project(goals, "improve");
+    return { same, improve, improvedHabits: goals };
   }
 
   // Weight loss plan with calorie science (1 kg fat ≈ 7700 kcal)
@@ -85,7 +85,8 @@
     };
   }
 
-  function scenarioAvatarPrompt(habits, goalInfo, scenario) {
+  function scenarioAvatarPrompt(habits, goalInfo, scenario, goalHabits) {
+    const goals = goalHabits || IDEAL;
     const base = 'DSLR photograph of the exact same real person from the reference photo — identical clothing, identical body, full body head to toe, standing confidently on a plain white background';
     const camera = 'High-end beauty photography, shot on Canon EOS R5, 85mm f/1.4, soft studio lighting. Skin looks real with natural texture, not plastic. NO illustration, NO anime, NO cartoon, NO painting, NO 3D render, NO CGI, NO digital art.';
 
@@ -110,20 +111,21 @@
       return `${base}. This person looks like the realistic outcome of keeping mostly the same habits for 6 months: ${desc}. Keep the person recognizable and real, not glamorized, not idealized, not harshly unhealthy, just plausibly a slightly more fatigued or unchanged version of the same person. ${camera}`;
     }
 
+    // "improve" scenario: describe appearance after living with the user's own goal habits
     const improvements = [];
     if (goalInfo.kgToLose > 10) improvements.push('visibly leaner face, defined cheekbones, sharper jawline');
     else if (goalInfo.kgToLose > 3) improvements.push('slightly leaner face, more defined jawline');
-    if (habits.sleep < 7.5) improvements.push('no dark circles whatsoever, no under-eye bags, bright wide-awake eyes, well-rested glow');
-    if (habits.water < 7) improvements.push('deeply hydrated skin, plump radiant complexion, natural luminosity');
-    if (habits.stress > 5) improvements.push('smooth relaxed forehead, no tension lines, calm serene expression');
-    if (habits.smoking > 0) improvements.push('clear even skin tone, no dullness or yellowing, healthier complexion');
-    if (habits.alcohol > 3) improvements.push('no facial redness, no puffiness, clean defined features');
-    if (habits.exercise < 4) improvements.push('healthy active glow, energetic vibrant look, fit appearance');
-    if (habits.diet < 7) improvements.push('clear bright skin, even healthy colour, smooth texture');
+    if (goals.sleep >= 7.5) improvements.push('no dark circles whatsoever, no under-eye bags, bright wide-awake eyes, well-rested glow');
+    if (goals.water >= 7) improvements.push('deeply hydrated skin, plump radiant complexion, natural luminosity');
+    if (goals.stress <= 5) improvements.push('smooth relaxed forehead, no tension lines, calm serene expression');
+    if (goals.smoking === 0 && habits.smoking > 0) improvements.push('clear even skin tone, no dullness or yellowing, healthier complexion');
+    if (goals.alcohol <= 3 && habits.alcohol > 3) improvements.push('no facial redness, no puffiness, clean defined features');
+    if (goals.exercise >= 4) improvements.push('healthy active glow, energetic vibrant look, fit appearance');
+    if (goals.diet >= 7) improvements.push('clear bright skin, even healthy colour, smooth texture');
 
     const desc = improvements.length ? improvements.join(', ') : 'glowing luminous skin, bright captivating eyes, radiant well-rested look';
-    return `${base}. This person looks: ${desc}, slightly more attractive version of themselves — sharper jawline, more defined facial features, better bone structure, confident glow — as if they have been living healthily for 6 months. ${camera}`;
+    return `${base}. This person looks: ${desc}, a more vibrant version of themselves — confident glow, well-rested energy — as if they have been living by their health goals for 6 months. ${camera}`;
   }
 
-  global.Predictor = { predictBoth, healthScore, calculateWeightPlan, scenarioAvatarPrompt };
+  global.Predictor = { predictBoth, healthScore, calculateWeightPlan, scenarioAvatarPrompt, idealHabits };
 })(window);

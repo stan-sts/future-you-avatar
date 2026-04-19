@@ -36,7 +36,7 @@
         <div class="hero-stats">
           <div class="hero-stat">
             <div class="l">Workflow</div>
-            <div class="v">3 Steps</div>
+            <div class="v">4 Steps</div>
           </div>
           <div class="hero-stat">
             <div class="l">Signals</div>
@@ -53,18 +53,25 @@
         <div class="step-status">Upload a source image</div>
       </button>
       <button class="step-tab" data-step-target="2" type="button">
-        <div class="step-n">02 <span>Planner</span></div>
+        <div class="step-n">02 <span>Baseline</span></div>
         <div class="step-title">Current Baseline</div>
         <div class="step-status">Set your real starting point</div>
       </button>
       <button class="step-tab" data-step-target="3" type="button">
-        <div class="step-n">03 <span>Output</span></div>
+        <div class="step-n">03 <span>Goals</span></div>
+        <div class="step-title">Ideal Goals</div>
+        <div class="step-status">Set your target habits</div>
+      </button>
+      <button class="step-tab" data-step-target="4" type="button">
+        <div class="step-n">04 <span>Output</span></div>
         <div class="step-title">Projection</div>
         <div class="step-status">Review your future self</div>
       </button>
     </div>
 
     <main id="app">
+
+      <!-- ── Step 1: Portrait ──────────────────────────────────────────────── -->
       <section class="step" data-step="1">
         <div class="section-head">
           <div class="num">01</div>
@@ -82,16 +89,17 @@
             <div id="selfiePreview" class="preview hidden"></div>
           </div>
           <div class="actions">
-            <button id="toStep2" class="primary hidden">Next: Habits &amp; Goals</button>
+            <button id="toStep2" class="primary hidden">Next: Current Baseline</button>
           </div>
         </div>
       </section>
 
+      <!-- ── Step 2: Current Baseline ─────────────────────────────────────── -->
       <section class="step hidden" data-step="2">
         <div class="section-head">
           <div class="num">02</div>
-          <h2>Current Baseline &amp; Goal</h2>
-          <div class="meta">Real data / wearable sync / target outcome</div>
+          <h2>Current Baseline</h2>
+          <div class="meta">Real data / wearable sync / starting point</div>
         </div>
         <div class="step-panel">
           <div class="watch-banner" id="watchBanner">
@@ -109,152 +117,104 @@
             Synced from Apple Health &middot; <span id="syncTime">just now</span>
           </div>
 
-          <div class="input-grid">
-            <section class="subsection">
-              <div class="section-label">Current baseline</div>
-              <p class="subsection-intro">This page is only for your real starting point. Tune the values manually or let Apple Health overwrite them with your actual recent activity.</p>
-              <div class="habit-sliders" id="habitSliders">
-                <div class="habit-row" data-id="sleep">
-                  <div class="habit-meta">
-                    <span class="habit-icon">😴</span>
-                    <div class="habit-label-wrap">
-                      <span class="habit-name">Sleep</span>
-                      <span class="habit-unit">hrs / night</span>
-                    </div>
+          <section class="subsection">
+            <div class="section-label">Current baseline</div>
+            <p class="subsection-intro">Your real starting point. Tune manually or let Apple Health overwrite with your actual recent activity.</p>
+            <div class="habit-sliders" id="habitSliders">
+              <div class="habit-row" data-id="sleep">
+                <div class="habit-meta">
+                  <span class="habit-icon">😴</span>
+                  <div class="habit-label-wrap">
+                    <span class="habit-name">Sleep</span>
+                    <span class="habit-unit">hrs / night</span>
                   </div>
-                  <input type="range" class="habit-range" id="sleep" min="0" max="12" step="0.5" value="6.5" />
-                  <span class="habit-val" id="sleepVal">6.5</span>
                 </div>
-
-                <div class="habit-row" data-id="exercise">
-                  <div class="habit-meta">
-                    <span class="habit-icon">🏃</span>
-                    <div class="habit-label-wrap">
-                      <span class="habit-name">Exercise</span>
-                      <span class="habit-unit">days / week</span>
-                    </div>
-                  </div>
-                  <input type="range" class="habit-range" id="exercise" min="0" max="7" step="1" value="2" />
-                  <span class="habit-val" id="exerciseVal">2</span>
-                </div>
-
-                <div class="habit-row" data-id="water">
-                  <div class="habit-meta">
-                    <span class="habit-icon">💧</span>
-                    <div class="habit-label-wrap">
-                      <span class="habit-name">Water</span>
-                      <span class="habit-unit">glasses / day</span>
-                    </div>
-                  </div>
-                  <input type="range" class="habit-range" id="water" min="0" max="20" step="1" value="4" />
-                  <span class="habit-val" id="waterVal">4</span>
-                </div>
-
-                <div class="habit-row" data-id="steps">
-                  <div class="habit-meta">
-                    <span class="habit-icon">👟</span>
-                    <div class="habit-label-wrap">
-                      <span class="habit-name">Steps</span>
-                      <span class="habit-unit">per day</span>
-                    </div>
-                  </div>
-                  <input type="range" class="habit-range" id="steps" min="0" max="30000" step="500" value="5000" />
-                  <span class="habit-val" id="stepsVal">5,000</span>
-                </div>
-
-                <div class="habit-row" data-id="diet">
-                  <div class="habit-meta">
-                    <span class="habit-icon">🥗</span>
-                    <div class="habit-label-wrap">
-                      <span class="habit-name">Diet quality</span>
-                      <span class="habit-unit">out of 10</span>
-                    </div>
-                  </div>
-                  <input type="range" class="habit-range" id="diet" min="1" max="10" step="1" value="5" />
-                  <span class="habit-val" id="dietVal">5</span>
-                </div>
-
-                <div class="habit-row" data-id="stress">
-                  <div class="habit-meta">
-                    <span class="habit-icon">🧘</span>
-                    <div class="habit-label-wrap">
-                      <span class="habit-name">Stress</span>
-                      <span class="habit-unit">level (low is better)</span>
-                    </div>
-                  </div>
-                  <input type="range" class="habit-range" id="stress" min="1" max="10" step="1" value="6" />
-                  <span class="habit-val" id="stressVal">6</span>
-                </div>
-
-                <div class="habit-row" data-id="smoking">
-                  <div class="habit-meta">
-                    <span class="habit-icon">🚬</span>
-                    <div class="habit-label-wrap">
-                      <span class="habit-name">Smoking</span>
-                      <span class="habit-unit">cigs / day</span>
-                    </div>
-                  </div>
-                  <input type="range" class="habit-range" id="smoking" min="0" max="40" step="1" value="0" />
-                  <span class="habit-val" id="smokingVal">0</span>
-                </div>
-
-                <div class="habit-row" data-id="alcohol">
-                  <div class="habit-meta">
-                    <span class="habit-icon">🍷</span>
-                    <div class="habit-label-wrap">
-                      <span class="habit-name">Alcohol</span>
-                      <span class="habit-unit">drinks / week</span>
-                    </div>
-                  </div>
-                  <input type="range" class="habit-range" id="alcohol" min="0" max="40" step="1" value="3" />
-                  <span class="habit-val" id="alcoholVal">3</span>
-                </div>
+                <input type="range" class="habit-range" id="sleep" min="0" max="12" step="0.5" value="6.5" />
+                <span class="habit-val" id="sleepVal">6.5</span>
               </div>
-            </section>
-
-            <section class="subsection goals-section">
-              <div class="section-label">Your goals</div>
-              <p class="subsection-intro">Set the outcome you want. Your ideal future will be generated automatically from science-backed health targets plus the goal below.</p>
-
-              <div class="weight-goal">
-                <div class="weight-pair">
-                  <div class="weight-field">
-                    <div class="wlabel">Current weight</div>
-                    <div class="weight-input-wrap">
-                      <input type="number" id="currentWeight" min="30" max="250" step="0.5" value="70" />
-                      <span class="weight-unit">kg</span>
-                    </div>
-                  </div>
-                  <div class="weight-arrow">→</div>
-                  <div class="weight-field">
-                    <div class="wlabel">Target weight</div>
-                    <div class="weight-input-wrap">
-                      <input type="number" id="targetWeight" min="30" max="250" step="0.5" value="65" />
-                      <span class="weight-unit">kg</span>
-                    </div>
+              <div class="habit-row" data-id="exercise">
+                <div class="habit-meta">
+                  <span class="habit-icon">🏃</span>
+                  <div class="habit-label-wrap">
+                    <span class="habit-name">Exercise</span>
+                    <span class="habit-unit">days / week</span>
                   </div>
                 </div>
+                <input type="range" class="habit-range" id="exercise" min="0" max="7" step="1" value="2" />
+                <span class="habit-val" id="exerciseVal">2</span>
               </div>
-
-              <div class="timeframe-row">
-                <span class="tf-label">Timeframe</span>
-                <div class="tf-buttons">
-                  <button class="tf-btn" data-months="3" type="button">3 months</button>
-                  <button class="tf-btn active" data-months="6" type="button">6 months</button>
-                  <button class="tf-btn" data-months="12" type="button">1 year</button>
+              <div class="habit-row" data-id="water">
+                <div class="habit-meta">
+                  <span class="habit-icon">💧</span>
+                  <div class="habit-label-wrap">
+                    <span class="habit-name">Water</span>
+                    <span class="habit-unit">glasses / day</span>
+                  </div>
                 </div>
+                <input type="range" class="habit-range" id="water" min="0" max="20" step="1" value="4" />
+                <span class="habit-val" id="waterVal">4</span>
               </div>
-
-              <div class="actions">
-                <button id="back1" class="ghost" type="button">Back</button>
-                <button id="predict" class="primary" type="button">See My Future Self</button>
+              <div class="habit-row" data-id="steps">
+                <div class="habit-meta">
+                  <span class="habit-icon">👟</span>
+                  <div class="habit-label-wrap">
+                    <span class="habit-name">Steps</span>
+                    <span class="habit-unit">per day</span>
+                  </div>
+                </div>
+                <input type="range" class="habit-range" id="steps" min="0" max="30000" step="500" value="5000" />
+                <span class="habit-val" id="stepsVal">5,000</span>
               </div>
-            </section>
-          </div>
+              <div class="habit-row" data-id="diet">
+                <div class="habit-meta">
+                  <span class="habit-icon">🥗</span>
+                  <div class="habit-label-wrap">
+                    <span class="habit-name">Diet quality</span>
+                    <span class="habit-unit">out of 10</span>
+                  </div>
+                </div>
+                <input type="range" class="habit-range" id="diet" min="1" max="10" step="1" value="5" />
+                <span class="habit-val" id="dietVal">5</span>
+              </div>
+              <div class="habit-row" data-id="stress">
+                <div class="habit-meta">
+                  <span class="habit-icon">🧘</span>
+                  <div class="habit-label-wrap">
+                    <span class="habit-name">Stress</span>
+                    <span class="habit-unit">level (low is better)</span>
+                  </div>
+                </div>
+                <input type="range" class="habit-range" id="stress" min="1" max="10" step="1" value="6" />
+                <span class="habit-val" id="stressVal">6</span>
+              </div>
+              <div class="habit-row" data-id="smoking">
+                <div class="habit-meta">
+                  <span class="habit-icon">🚬</span>
+                  <div class="habit-label-wrap">
+                    <span class="habit-name">Smoking</span>
+                    <span class="habit-unit">cigs / day</span>
+                  </div>
+                </div>
+                <input type="range" class="habit-range" id="smoking" min="0" max="40" step="1" value="0" />
+                <span class="habit-val" id="smokingVal">0</span>
+              </div>
+              <div class="habit-row" data-id="alcohol">
+                <div class="habit-meta">
+                  <span class="habit-icon">🍷</span>
+                  <div class="habit-label-wrap">
+                    <span class="habit-name">Alcohol</span>
+                    <span class="habit-unit">drinks / week</span>
+                  </div>
+                </div>
+                <input type="range" class="habit-range" id="alcohol" min="0" max="40" step="1" value="3" />
+                <span class="habit-val" id="alcoholVal">3</span>
+              </div>
+            </div>
+          </section>
 
           <section class="subsection today-inputs-panel">
-            <div class="section-label">Today's progress</div>
-            <p class="subsection-intro">Apple Health fills these automatically when available. If today&rsquo;s data does not come through, enter it here so the results page can still show your live progress.</p>
+            <div class="section-label">Today&rsquo;s progress</div>
+            <p class="subsection-intro">Apple Health fills these automatically when available. Enter manually as a fallback so the results page can still show your live progress.</p>
             <div class="today-inputs-grid">
               <label class="today-input-card">
                 <span class="today-input-label">Sleep</span>
@@ -286,12 +246,161 @@
               </label>
             </div>
           </section>
+
+          <div class="actions">
+            <button id="back1" class="ghost" type="button">Back</button>
+            <button id="toStep3" class="primary" type="button">Next: Set Goals</button>
+          </div>
         </div>
       </section>
 
+      <!-- ── Step 3: Ideal Goals ───────────────────────────────────────────── -->
       <section class="step hidden" data-step="3">
         <div class="section-head">
           <div class="num">03</div>
+          <h2>Your Ideal Goals</h2>
+          <div class="meta">Target habits / goal outcome</div>
+        </div>
+        <div class="step-panel">
+          <div class="input-grid">
+            <section class="subsection">
+              <div class="section-label">Target habits</div>
+              <p class="subsection-intro">Where do you want to be in 6 months? Your ideal future avatar will be generated based on these exact target habits — not generic science targets.</p>
+              <div class="habit-sliders" id="goalSliders">
+                <div class="habit-row" data-id="gSleep">
+                  <div class="habit-meta">
+                    <span class="habit-icon">😴</span>
+                    <div class="habit-label-wrap">
+                      <span class="habit-name">Sleep</span>
+                      <span class="habit-unit">hrs / night</span>
+                    </div>
+                  </div>
+                  <input type="range" class="habit-range" id="gSleep" min="0" max="12" step="0.5" value="8" />
+                  <span class="habit-val" id="gSleepVal">8</span>
+                </div>
+                <div class="habit-row" data-id="gExercise">
+                  <div class="habit-meta">
+                    <span class="habit-icon">🏃</span>
+                    <div class="habit-label-wrap">
+                      <span class="habit-name">Exercise</span>
+                      <span class="habit-unit">days / week</span>
+                    </div>
+                  </div>
+                  <input type="range" class="habit-range" id="gExercise" min="0" max="7" step="1" value="5" />
+                  <span class="habit-val" id="gExerciseVal">5</span>
+                </div>
+                <div class="habit-row" data-id="gWater">
+                  <div class="habit-meta">
+                    <span class="habit-icon">💧</span>
+                    <div class="habit-label-wrap">
+                      <span class="habit-name">Water</span>
+                      <span class="habit-unit">glasses / day</span>
+                    </div>
+                  </div>
+                  <input type="range" class="habit-range" id="gWater" min="0" max="20" step="1" value="8" />
+                  <span class="habit-val" id="gWaterVal">8</span>
+                </div>
+                <div class="habit-row" data-id="gSteps">
+                  <div class="habit-meta">
+                    <span class="habit-icon">👟</span>
+                    <div class="habit-label-wrap">
+                      <span class="habit-name">Steps</span>
+                      <span class="habit-unit">per day</span>
+                    </div>
+                  </div>
+                  <input type="range" class="habit-range" id="gSteps" min="0" max="30000" step="500" value="10000" />
+                  <span class="habit-val" id="gStepsVal">10,000</span>
+                </div>
+                <div class="habit-row" data-id="gDiet">
+                  <div class="habit-meta">
+                    <span class="habit-icon">🥗</span>
+                    <div class="habit-label-wrap">
+                      <span class="habit-name">Diet quality</span>
+                      <span class="habit-unit">out of 10</span>
+                    </div>
+                  </div>
+                  <input type="range" class="habit-range" id="gDiet" min="1" max="10" step="1" value="8" />
+                  <span class="habit-val" id="gDietVal">8</span>
+                </div>
+                <div class="habit-row" data-id="gStress">
+                  <div class="habit-meta">
+                    <span class="habit-icon">🧘</span>
+                    <div class="habit-label-wrap">
+                      <span class="habit-name">Stress</span>
+                      <span class="habit-unit">level (low is better)</span>
+                    </div>
+                  </div>
+                  <input type="range" class="habit-range" id="gStress" min="1" max="10" step="1" value="3" />
+                  <span class="habit-val" id="gStressVal">3</span>
+                </div>
+                <div class="habit-row" data-id="gSmoking">
+                  <div class="habit-meta">
+                    <span class="habit-icon">🚬</span>
+                    <div class="habit-label-wrap">
+                      <span class="habit-name">Smoking</span>
+                      <span class="habit-unit">cigs / day</span>
+                    </div>
+                  </div>
+                  <input type="range" class="habit-range" id="gSmoking" min="0" max="40" step="1" value="0" />
+                  <span class="habit-val" id="gSmokingVal">0</span>
+                </div>
+                <div class="habit-row" data-id="gAlcohol">
+                  <div class="habit-meta">
+                    <span class="habit-icon">🍷</span>
+                    <div class="habit-label-wrap">
+                      <span class="habit-name">Alcohol</span>
+                      <span class="habit-unit">drinks / week</span>
+                    </div>
+                  </div>
+                  <input type="range" class="habit-range" id="gAlcohol" min="0" max="40" step="1" value="3" />
+                  <span class="habit-val" id="gAlcoholVal">3</span>
+                </div>
+              </div>
+            </section>
+
+            <section class="subsection goals-section">
+              <div class="section-label">Weight goal</div>
+              <p class="subsection-intro">Set the outcome you want. Your ideal future will be generated from your target habits plus the weight goal below.</p>
+              <div class="weight-goal">
+                <div class="weight-pair">
+                  <div class="weight-field">
+                    <div class="wlabel">Current weight</div>
+                    <div class="weight-input-wrap">
+                      <input type="number" id="currentWeight" min="30" max="250" step="0.5" value="70" />
+                      <span class="weight-unit">kg</span>
+                    </div>
+                  </div>
+                  <div class="weight-arrow">→</div>
+                  <div class="weight-field">
+                    <div class="wlabel">Target weight</div>
+                    <div class="weight-input-wrap">
+                      <input type="number" id="targetWeight" min="30" max="250" step="0.5" value="65" />
+                      <span class="weight-unit">kg</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+              <div class="timeframe-row">
+                <span class="tf-label">Timeframe</span>
+                <div class="tf-buttons">
+                  <button class="tf-btn" data-months="3" type="button">3 months</button>
+                  <button class="tf-btn active" data-months="6" type="button">6 months</button>
+                  <button class="tf-btn" data-months="12" type="button">1 year</button>
+                </div>
+              </div>
+              <div class="actions">
+                <button id="back2" class="ghost" type="button">Back</button>
+                <button id="generate" class="primary" type="button">Generate My Future Self</button>
+              </div>
+            </section>
+          </div>
+        </div>
+      </section>
+
+      <!-- ── Step 4: Projection ────────────────────────────────────────────── -->
+      <section class="step hidden" data-step="4">
+        <div class="section-head">
+          <div class="num">04</div>
           <h2>Future Projection</h2>
           <div class="meta">Avatar / evidence / recovery ledger</div>
         </div>
@@ -300,6 +409,7 @@
 
           <div class="future-layout">
             <div class="future-compare-grid">
+
               <div class="future-avatar-col">
                 <div class="future-avatar-head">
                   <div class="section-label">Projection A</div>
@@ -310,6 +420,11 @@
                     <div class="spinner"></div>
                     <p id="sameFutureLoadingText">Generating current-path face…</p>
                   </div>
+                  <div class="avatar-view-toggle hidden" id="sameViewToggle">
+                    <button class="view-btn active" data-view="3d" data-target="same" type="button">3D Model</button>
+                    <button class="view-btn" data-view="2d" data-target="same" type="button">2D Photo</button>
+                  </div>
+                  <img id="same2dImg" class="avatar-2d-img hidden" alt="Current path 2D projection" />
                   <model-viewer id="sameFutureModel" class="avatar-model same"
                     auto-rotate camera-controls shadow-intensity="1"
                     style="display:none">
@@ -331,6 +446,11 @@
                     <div class="spinner"></div>
                     <p id="idealFutureLoadingText">Generating ideal future face…</p>
                   </div>
+                  <div class="avatar-view-toggle hidden" id="idealViewToggle">
+                    <button class="view-btn active" data-view="3d" data-target="ideal" type="button">3D Model</button>
+                    <button class="view-btn" data-view="2d" data-target="ideal" type="button">2D Photo</button>
+                  </div>
+                  <img id="ideal2dImg" class="avatar-2d-img hidden" alt="Ideal path 2D projection" />
                   <model-viewer id="idealFutureModel" class="avatar-model improve"
                     auto-rotate camera-controls shadow-intensity="1"
                     style="display:none">
@@ -341,6 +461,7 @@
                   <button class="speak" data-target="idealFutureCoach" data-scenario="improve" data-model="idealFutureModel" type="button">Avatar Speaks</button>
                 </div>
               </div>
+
             </div>
 
             <div class="future-data-col">
@@ -354,11 +475,12 @@
           </div>
 
           <div class="actions center">
-            <button id="back2" class="ghost" type="button">Back</button>
+            <button id="back3" class="ghost" type="button">Back</button>
             <button id="restart" class="ghost" type="button">Start Over</button>
           </div>
         </div>
       </section>
+
     </main>
 
     <footer class="foot">
