@@ -246,6 +246,49 @@ app.get('/api/proxy-model', (req, res) => {
   });
 });
 
+// ── K2 Think: motivational coach message ─────────────────────────────────────
+app.post('/api/coach-message', wrap(async (req, res) => {
+  const { scenario, habits, projection, k2Key } = req.body || {};
+  const apiKey = k2Key || process.env.K2_THINK_KEY;
+  if (!apiKey) return res.status(400).json({ error: 'K2 Think API key not configured' });
+
+  const habitsLine = h =>
+    `sleep ${h.sleep}h, exercise ${h.exercise}d/wk, water ${h.water} glasses, ` +
+    `${h.steps} steps/day, screen time ${h.screenTime ?? 0}h/day, diet ${h.diet}/10, ` +
+    `stress ${h.stress}/10, ${h.smoking} cigs/day, ${h.alcohol} drinks/week`;
+
+  const systemPrompt = `You are "Future You", a warm, candid motivational coach speaking directly to a person about their own 6-month future based on their current habits. Speak in FIRST PERSON as their future self. Keep it to 3-4 sentences, concrete and specific to the habits they mentioned. No emojis, no lists, no preamble. If the scenario is "same", be honestly concerned but caring. If "improve", be proud and encouraging.`;
+
+  const userMsg = `Scenario: ${scenario === 'improve' ? 'I improved my habits' : 'I kept the same habits'}.
+Current habits: ${habitsLine(habits)}.
+Projected 6-month outcome: health score ${projection.score}/100, energy ${projection.energy}/100, skin ${projection.skinHealth}/100, sleep quality ${projection.sleepQuality}/100, biological-age shift ${projection.ageShift} yrs, weight drift ${projection.weightDrift} kg.
+Speak to me as Future Me.`;
+
+  const response = await fetch('https://api.k2think.ai/v1/chat/completions', {
+    method: 'POST',
+    headers: { 'Authorization': `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      model: 'MBZUAI-IFM/K2-Think-v2',
+      messages: [
+        { role: 'system', content: systemPrompt },
+        { role: 'user', content: userMsg },
+      ],
+      stream: false,
+    }),
+  });
+
+  if (!response.ok) {
+    const err = await response.text();
+    throw new Error(`K2 coach error ${response.status}: ${err}`);
+  }
+
+  const data = await response.json();
+  let raw = data.choices?.[0]?.message?.content?.trim() || '';
+  const message = raw.replace(/<think>[\s\S]*?<\/think>/gi, '').trim();
+  if (!message) throw new Error('No message returned by K2');
+  res.json({ message });
+}));
+
 // ── K2 Think: single constrained recommendation after results ────────────────
 app.post('/api/recommendation', wrap(async (req, res) => {
   const { sleep, steps, activeEnergy, heartRate, screenTime, goal, k2Key } = req.body || {};
