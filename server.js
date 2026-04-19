@@ -34,9 +34,20 @@ let latestHealthData = null;
 
 // iOS companion app POSTs data here
 app.post('/api/health-sync', (req, res) => {
-  const { sleep, exercise, water, steps, diet, stress, smoking, alcohol } = req.body;
+  const { sleep, exercise, water, steps, diet, stress, smoking, alcohol, history } = req.body;
   if (sleep == null || steps == null) return res.status(400).json({ error: 'Missing fields' });
-  latestHealthData = { sleep, exercise, water, steps, diet, stress, smoking, alcohol, ts: Date.now() };
+  latestHealthData = {
+    sleep,
+    exercise,
+    water,
+    steps,
+    diet,
+    stress,
+    smoking,
+    alcohol,
+    history: history || null,
+    ts: Date.now(),
+  };
   console.log('Health sync received:', latestHealthData);
   res.json({ ok: true });
 });
@@ -57,7 +68,7 @@ app.post('/api/generate-2d', wrap(async (req, res) => {
   const base64Data = image.replace(/^data:image\/\w+;base64,/, '');
 
   const response = await fetch(
-    `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-exp-image-generation:generateContent?key=${apiKey}`,
+    `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-flash-image-preview:generateContent?key=${apiKey}`,
     {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -79,11 +90,14 @@ app.post('/api/generate-2d', wrap(async (req, res) => {
   }
 
   const data = await response.json();
-  const part = data.candidates?.[0]?.content?.parts?.find(p => p.inline_data);
+  const parts = data.candidates?.[0]?.content?.parts ?? [];
+  const part  = parts.find(p => p.inlineData) || parts.find(p => p.inline_data);
   if (!part) throw new Error('No image returned by Google AI');
 
-  const { mime_type, data: imgData } = part.inline_data;
-  res.json({ image: `data:${mime_type};base64,${imgData}` });
+  const blob      = part.inlineData || part.inline_data;
+  const mimeType  = blob.mimeType  || blob.mime_type;
+  const imgData   = blob.data;
+  res.json({ image: `data:${mimeType};base64,${imgData}` });
 }));
 
 app.post('/api/generate-avatar', wrap(async (req, res) => {

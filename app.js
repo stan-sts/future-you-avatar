@@ -1,9 +1,18 @@
 (function () {
-  const state = { selfieDataUrl: null, habits: null, goals: null, weightPlan: null, prediction: null };
+  const state = {
+    selfieDataUrl: null,
+    habits: null,
+    goals: null,
+    weightPlan: null,
+    prediction: null,
+    syncedHealth: null,
+  };
 
   const $ = (sel) => document.querySelector(sel);
   const steps = document.querySelectorAll(".step");
+  const stepTabs = document.querySelectorAll(".step-tab");
   const SPINNER_HTML = '<div class="spinner"></div><p id="futureLoadingText">Generating 2D face…</p>';
+  const HEALTH_GOALS = { sleep: 8, activeEnergy: 300, steps: 10000 };
 
   // ── Habit slider config ──────────────────────────────────────────────────────
   const HABITS = [
@@ -57,6 +66,110 @@
   }
   initSliders();
 
+  function round1(value) {
+    return Math.round(Number(value || 0) * 10) / 10;
+  }
+
+  function isoDate(date) {
+    return new Date(date.getTime() - date.getTimezoneOffset() * 60000).toISOString().slice(0, 10);
+  }
+
+  function formatShortDate(value) {
+    const date = new Date(`${value}T12:00:00`);
+    return {
+      dayLabel: date.toLocaleDateString([], { weekday: "short" }).toUpperCase(),
+      monthDay: date.toLocaleDateString([], { month: "short", day: "numeric" }).toUpperCase(),
+    };
+  }
+
+  function normalizeHistoryDay(day, fallbackDate) {
+    const date = typeof day?.date === "string" && day.date ? day.date : fallbackDate;
+    const sleep = Number(day?.sleep ?? 0);
+    const steps = Number(day?.steps ?? 0);
+    const activeEnergy = Number(day?.activeEnergy ?? 0);
+    const workoutMetGoal = day?.workoutMetGoal != null ? Boolean(day.workoutMetGoal) : activeEnergy >= HEALTH_GOALS.activeEnergy;
+    return {
+      date,
+      sleep,
+      steps,
+      activeEnergy,
+      workoutMetGoal,
+      sleepMetGoal: sleep >= HEALTH_GOALS.sleep,
+      stepsMetGoal: steps >= HEALTH_GOALS.steps,
+      ...formatShortDate(date),
+    };
+  }
+
+  function estimatedHistoryFromHabits(habits) {
+    const profile = habits || readHabits();
+    const now = new Date();
+    const sleepOffsets = [-0.9, -0.2, 0.4, -0.5, 0.2, 0.6, -0.1];
+    const stepOffsets = [-2300, 800, -1200, 1500, -700, 1900, 400];
+    const workoutQuota = Math.max(0, Math.min(7, Math.round(profile.exercise || 0)));
+    const workoutDays = new Set();
+
+    if (workoutQuota > 0) {
+      for (let i = 0; i < workoutQuota; i++) {
+        workoutDays.add(Math.round((i * 6) / Math.max(workoutQuota - 1, 1)));
+      }
+    }
+
+    return Array.from({ length: 7 }, (_, index) => {
+      const date = new Date(now);
+      date.setDate(now.getDate() - (6 - index));
+
+      const sleep = Math.max(4.5, Math.min(10, round1((profile.sleep || 0) + sleepOffsets[index])));
+      const steps = Math.max(1500, Math.round((profile.steps || 0) + stepOffsets[index]));
+      const activeEnergy = workoutDays.has(index)
+        ? Math.max(HEALTH_GOALS.activeEnergy + 40, Math.round(220 + (profile.exercise || 0) * 35))
+        : Math.max(40, Math.round(90 + index * 15));
+
+      return normalizeHistoryDay({
+        date: isoDate(date),
+        sleep,
+        steps,
+        activeEnergy,
+        workoutMetGoal: activeEnergy >= HEALTH_GOALS.activeEnergy,
+      }, isoDate(date));
+    });
+  }
+
+  function syncedHistoryDays() {
+    const rawDays = state.syncedHealth?.raw?.history?.days;
+    if (!Array.isArray(rawDays) || !rawDays.length) return [];
+    return rawDays
+      .slice()
+      .sort((a, b) => String(a.date || "").localeCompare(String(b.date || "")))
+      .slice(-7)
+      .map((day, index) => {
+        const fallbackDate = isoDate(new Date(Date.now() - (6 - index) * 86400000));
+        return normalizeHistoryDay(day, fallbackDate);
+      });
+  }
+
+  function currentStreak(days, key) {
+    let streak = 0;
+    for (let i = days.length - 1; i >= 0; i--) {
+      if (!days[i][key]) break;
+      streak += 1;
+    }
+    return streak;
+  }
+
+  function countHits(days, key) {
+    return days.filter(day => day[key]).length;
+  }
+
+  function averageOf(days, key) {
+    if (!days.length) return 0;
+    return days.reduce((sum, day) => sum + Number(day[key] || 0), 0) / days.length;
+  }
+
+  function lastSyncLabel(timestamp) {
+    if (!timestamp) return "Not synced yet";
+    return new Date(timestamp).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+  }
+
   // ── Timeframe buttons ────────────────────────────────────────────────────────
   document.querySelectorAll(".tf-btn").forEach(btn => {
     btn.addEventListener("click", () => {
@@ -71,15 +184,36 @@
       const raw = base + (Math.random() - 0.5) * spread * 2;
       return Math.round(raw / step) * step;
     };
+    const now = new Date();
+    const history = [];
+
+    for (let offset = 6; offset >= 0; offset--) {
+      const date = new Date(now);
+      date.setDate(now.getDate() - offset);
+      const sleep = Math.max(5, Math.min(9, rnd(7.2, 1.1, 0.1)));
+      const steps = Math.max(3500, Math.min(14000, rnd(8300, 2600, 100)));
+      const activeEnergy = Math.max(80, Math.min(620, rnd(330, 180, 10)));
+      history.push({
+        date: date.toISOString().slice(0, 10),
+        sleep,
+        steps,
+        activeEnergy,
+        workoutMetGoal: activeEnergy >= HEALTH_GOALS.activeEnergy,
+      });
+    }
+
+    const latest = history[history.length - 1];
+    const workoutDays = history.filter(day => day.workoutMetGoal).length;
     return {
-      sleep:    Math.max(4,    Math.min(9,     rnd(7,   1,   0.5))),
-      exercise: Math.max(1,    Math.min(6,     rnd(3,   1,   1))),
+      sleep:    latest.sleep,
+      exercise: workoutDays,
       water:    Math.max(3,    Math.min(10,    rnd(6,   2,   1))),
-      steps:    Math.max(3000, Math.min(12000, rnd(7500,2000,500))),
+      steps:    latest.steps,
       diet:     Math.max(4,    Math.min(8,     rnd(6,   1,   1))),
       stress:   Math.max(3,    Math.min(7,     rnd(5,   1,   1))),
       smoking:  0,
       alcohol:  Math.max(0,    Math.min(5,     rnd(2,   1,   1))),
+      history:  { days: history },
     };
   }
 
@@ -140,20 +274,56 @@
     btn.textContent = "✓ Connected";
     btn.classList.remove("loading");
     btn.classList.add("done");
-    const time = new Date().toLocaleTimeString([], { hour:"2-digit", minute:"2-digit" });
+    const syncedAt = Date.now();
+    const historyCount = Array.isArray(data?.history?.days) ? data.history.days.length : 0;
+    const time = new Date(syncedAt).toLocaleTimeString([], { hour:"2-digit", minute:"2-digit" });
+    state.syncedHealth = { source, syncedAt, raw: data };
     $("#watchSynced").innerHTML =
-      `<span class="sync-dot"></span> Synced from ${source} · ${time}`;
+      `<span class="sync-dot"></span> Synced from ${source}${historyCount ? ` · ${historyCount} daily records` : ""} · ${time}`;
 
     HABITS.forEach((cfg, i) => {
       const val = data[cfg.id] ?? Number(document.getElementById(cfg.id)?.value ?? 0);
       setTimeout(() => animateSliderTo(cfg, val), i * 80);
     });
+
+    if (state.goals && state.prediction) {
+      renderProgressBars();
+    }
+  }
+
+  function stepAvailable(step) {
+    if (step === 1) return true;
+    if (step === 2) return Boolean(state.selfieDataUrl);
+    if (step === 3) return Boolean(state.prediction);
+    return false;
+  }
+
+  function updateStepTabs(activeStep) {
+    document.body.dataset.step = String(activeStep);
+    stepTabs.forEach(tab => {
+      const target = Number(tab.dataset.stepTarget);
+      const available = stepAvailable(target);
+      tab.classList.toggle("active", target === activeStep);
+      tab.classList.toggle("done", available && target < activeStep);
+      tab.disabled = !available && target !== activeStep;
+      tab.setAttribute("aria-disabled", tab.disabled ? "true" : "false");
+    });
   }
 
   function showStep(n) {
     steps.forEach(s => s.classList.toggle("hidden", Number(s.dataset.step) !== n));
+    updateStepTabs(n);
     window.scrollTo({ top: 0, behavior: "smooth" });
   }
+
+  stepTabs.forEach(tab => {
+    tab.addEventListener("click", () => {
+      if (tab.disabled) return;
+      showStep(Number(tab.dataset.stepTarget));
+    });
+  });
+
+  updateStepTabs(1);
 
   // ── Step 1: selfie upload ────────────────────────────────────────────────────
   $("#selfieInput").addEventListener("change", e => {
@@ -167,6 +337,7 @@
         preview.innerHTML = `<img src="${resized}" alt="your selfie" />`;
         preview.classList.remove("hidden");
         $("#toStep2").classList.remove("hidden");
+        updateStepTabs(Number(document.body.dataset.step || 1));
       });
     };
     reader.readAsDataURL(file);
@@ -284,74 +455,157 @@
     return "Significant diet + exercise changes needed — consider a nutritionist.";
   }
 
+  function buildEvidenceModel() {
+    const observedDays = syncedHistoryDays();
+    const observed = observedDays.length >= 3;
+    const days = observed ? observedDays : estimatedHistoryFromHabits(state.habits);
+    const today = days[days.length - 1];
+    const sleepAvg = averageOf(days, "sleep");
+    const workoutHits = countHits(days, "workoutMetGoal");
+    const sleepHits = countHits(days, "sleepMetGoal");
+    const stepAvg = averageOf(days, "steps");
+
+    return {
+      mode: observed ? "observed" : "estimated",
+      source: observed ? (state.syncedHealth?.source || "Apple Health") : "Planner estimate",
+      lastSync: observed ? lastSyncLabel(state.syncedHealth?.syncedAt) : "Connect Apple Health",
+      days,
+      today,
+      sleepAvg,
+      stepAvg,
+      sleepHits,
+      workoutHits,
+      sleepStreak: currentStreak(days, "sleepMetGoal"),
+      workoutStreak: currentStreak(days, "workoutMetGoal"),
+    };
+  }
+
+  function sleepDeltaText(day) {
+    const diff = round1(day.sleep - HEALTH_GOALS.sleep);
+    return diff >= 0 ? `cleared by ${round1(diff)}h` : `short by ${round1(Math.abs(diff))}h`;
+  }
+
+  function workoutDetailText(day) {
+    return day.workoutMetGoal
+      ? `${Math.round(day.activeEnergy)} kcal active`
+      : `${Math.round(day.activeEnergy)} / ${HEALTH_GOALS.activeEnergy} kcal`;
+  }
+
+  function stepChipText(day) {
+    return day.stepsMetGoal
+      ? `hit ${Math.round(day.steps).toLocaleString()}`
+      : `${Math.round(day.steps).toLocaleString()} / ${HEALTH_GOALS.steps.toLocaleString()}`;
+  }
+
+  function streakCardMarkup(label, streak, hits, summary, note, days, key, valueFormatter) {
+    return `
+      <article class="streak-card">
+        <div class="streak-card-label">${label}</div>
+        <div class="streak-card-value">${streak ? `${streak}-day streak` : "No streak yet"}</div>
+        <div class="streak-card-meta">${hits} / 7 days hit goal · ${summary}</div>
+        <div class="streak-mini-track">
+          ${days.map((day, index) => `
+            <div class="streak-day ${day[key] ? "met" : "miss"} ${index === days.length - 1 ? "today" : ""}">
+              <span class="streak-day-name">${day.dayLabel.slice(0, 3)}</span>
+              <span class="streak-day-value">${valueFormatter(day)}</span>
+            </div>
+          `).join("")}
+        </div>
+        <div class="streak-card-note">${note}</div>
+      </article>
+    `;
+  }
+
   function renderProgressBars() {
-    const h  = state.habits;
-    const g  = state.goals;
-    const p  = state.prediction;
-    const r1 = x => Math.round(x * 10) / 10;
+    const evidence = buildEvidenceModel();
+    const weightLine = state.goals.currentWeight > state.goals.targetWeight
+      ? `Weight target still needs ${round1(state.goals.currentWeight - state.goals.targetWeight)} kg of progress across ${state.goals.months} months.`
+      : `Weight target is set for maintenance over ${state.goals.months} months.`;
+    const modeCopy = evidence.mode === "observed"
+      ? "Observed from Apple Health. A day only counts when the watch data clears the target."
+      : "Using modeled days from the current sliders until Apple Health sends daily history.";
 
-    const bars = [
-      g.currentWeight > g.targetWeight ? {
-        label:  'Weight',
-        icon:   '⚖️',
-        from:   `${g.currentWeight} kg`,
-        to:     `${g.targetWeight} kg`,
-        pct:    0,
-        detail: `-${r1(g.currentWeight - g.targetWeight)} kg to lose`,
-        color:  '#ffd580',
-      } : null,
-      {
-        label:  'Sleep',
-        icon:   '😴',
-        from:   `${h.sleep} hrs`,
-        to:     '8 hrs/night',
-        pct:    Math.round(Math.min(h.sleep / 8, 1) * 100),
-        detail: h.sleep >= 8 ? 'On target!' : `+${r1(8 - h.sleep)} hrs needed`,
-        color:  '#7af0b1',
-      },
-      {
-        label:  'Exercise',
-        icon:   '🏃',
-        from:   `${h.exercise} d/w`,
-        to:     '5 days/week',
-        pct:    Math.round(Math.min(h.exercise / 5, 1) * 100),
-        detail: h.exercise >= 5 ? 'On target!' : `+${5 - h.exercise} days/week needed`,
-        color:  '#7c9cff',
-      },
-      {
-        label:  'Water',
-        icon:   '💧',
-        from:   `${h.water} glasses`,
-        to:     '8 glasses/day',
-        pct:    Math.round(Math.min(h.water / 8, 1) * 100),
-        detail: h.water >= 8 ? 'On target!' : `+${8 - h.water} glasses/day needed`,
-        color:  '#5be1c4',
-      },
-      {
-        label:  'Health Score',
-        icon:   '❤️',
-        from:   `${p.same.score}/100`,
-        to:     `${p.improve.score}/100`,
-        pct:    p.same.score,
-        detail: `+${p.improve.score - p.same.score} pts potential`,
-        color:  '#ff9a9a',
-      },
-    ].filter(Boolean);
+    $("#progressBars").innerHTML = `
+      <section class="progress-ledger">
+        <div class="progress-ledger-top">
+          <div>
+            <div class="progress-kicker">Goal Evidence / Last 7 Days</div>
+            <h3 class="progress-headline">Recovery + Workout Ledger</h3>
+            <p class="progress-subhead">${modeCopy} ${weightLine}</p>
+          </div>
+          <div class="progress-meta">
+            <span class="progress-mode ${evidence.mode === "observed" ? "live" : ""}">${evidence.source}</span>
+            <span class="progress-mode">${evidence.sleepHits}/7 sleep clears</span>
+            <span class="progress-mode">${evidence.workoutHits}/7 workout clears</span>
+            <span class="progress-mode">Avg ${Math.round(evidence.stepAvg).toLocaleString()} steps</span>
+            <span class="progress-mode">Sync ${evidence.lastSync}</span>
+          </div>
+        </div>
 
-    $("#progressBars").innerHTML = bars.map(b => `
-      <div class="prog-bar-row">
-        <div class="prog-bar-header">
-          <span class="prog-icon">${b.icon}</span>
-          <span class="prog-label">${b.label}</span>
-          <span class="prog-from-to">${b.from} <span class="prog-arrow">→</span> <b>${b.to}</b></span>
+        <div class="streak-board">
+          ${streakCardMarkup(
+            "Sleep goal",
+            evidence.sleepStreak,
+            evidence.sleepHits,
+            `avg ${round1(evidence.sleepAvg)}h vs ${HEALTH_GOALS.sleep}h target`,
+            evidence.today.sleepMetGoal
+              ? `Today logged ${round1(evidence.today.sleep)}h and kept the recovery streak alive.`
+              : `Today logged ${round1(evidence.today.sleep)}h, ${sleepDeltaText(evidence.today)}.`,
+            evidence.days,
+            "sleepMetGoal",
+            day => `${round1(day.sleep)}h`
+          )}
+          ${streakCardMarkup(
+            "Workout goal",
+            evidence.workoutStreak,
+            evidence.workoutHits,
+            `avg ${Math.round(averageOf(evidence.days, "activeEnergy"))} kcal active`,
+            evidence.today.workoutMetGoal
+              ? `Today crossed the ${HEALTH_GOALS.activeEnergy} kcal movement threshold.`
+              : `Today stayed below the ${HEALTH_GOALS.activeEnergy} kcal workout threshold.`,
+            evidence.days,
+            "workoutMetGoal",
+            day => `${Math.round(day.activeEnergy)}`
+          )}
         </div>
-        <div class="prog-track">
-          <div class="prog-fill" style="width:${b.pct}%;background:${b.color}"></div>
-          <span class="prog-pct">${b.pct}%</span>
+
+        <div class="day-ledger">
+          <div class="day-ledger-head">Daily evidence by signal</div>
+          ${evidence.days.map(day => `
+            <div class="day-row">
+              <div class="day-stamp">
+                <span class="day-label">${day.dayLabel}</span>
+                <span class="day-date">${day.monthDay}</span>
+              </div>
+              <div class="day-metric">
+                <div class="metric-label">Sleep</div>
+                <div class="metric-value">${round1(day.sleep)}h</div>
+                <div class="metric-detail">Target ${HEALTH_GOALS.sleep}h nightly</div>
+                <span class="metric-chip ${day.sleepMetGoal ? "met" : "miss"}">${day.sleepMetGoal ? "goal cleared" : sleepDeltaText(day)}</span>
+              </div>
+              <div class="day-metric">
+                <div class="metric-label">Workout</div>
+                <div class="metric-value">${Math.round(day.activeEnergy)} kcal</div>
+                <div class="metric-detail">Move goal ${HEALTH_GOALS.activeEnergy} kcal</div>
+                <span class="metric-chip ${day.workoutMetGoal ? "met" : "miss"}">${day.workoutMetGoal ? "workout counted" : workoutDetailText(day)}</span>
+              </div>
+              <div class="day-metric">
+                <div class="metric-label">Steps</div>
+                <div class="metric-value">${Math.round(day.steps).toLocaleString()}</div>
+                <div class="metric-detail">Daily target ${HEALTH_GOALS.steps.toLocaleString()}</div>
+                <span class="metric-chip ${day.stepsMetGoal ? "met" : "neutral"}">${stepChipText(day)}</span>
+              </div>
+            </div>
+          `).join("")}
         </div>
-        <div class="prog-detail">${b.detail}</div>
-      </div>
-    `).join('');
+
+        <div class="ledger-footnote">
+          ${evidence.mode === "observed"
+            ? "Apple Health currently feeds last-night sleep, daily steps, and active energy into this board."
+            : "Connect the companion app to replace estimated days with actual Apple Watch history for real streak scoring."}
+        </div>
+      </section>
+    `;
   }
 
   // ── Two-step avatar generation ───────────────────────────────────────────────
@@ -463,7 +717,14 @@
   // ── Restart ──────────────────────────────────────────────────────────────────
   $("#restart").addEventListener("click", () => {
     AvatarVoice.stop();
-    Object.assign(state, { selfieDataUrl: null, habits: null, goals: null, weightPlan: null, prediction: null });
+    Object.assign(state, {
+      selfieDataUrl: null,
+      habits: null,
+      goals: null,
+      weightPlan: null,
+      prediction: null,
+      syncedHealth: null,
+    });
     $("#selfieInput").value       = "";
     $("#selfiePreview").innerHTML = "";
     $("#selfiePreview").classList.add("hidden");

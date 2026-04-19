@@ -1,6 +1,14 @@
 import HealthKit
 import Foundation
 
+struct DailyHealthSample: Codable {
+    var date: String
+    var sleep: Double
+    var steps: Double
+    var activeEnergy: Double
+    var workoutMetGoal: Bool
+}
+
 class HealthKitManager: ObservableObject {
     let store = HKHealthStore()
 
@@ -89,7 +97,66 @@ class HealthKitManager: ObservableObject {
         return (ml / 250).rounded()
     }
 
+    // Daily history for the web streak board
+    func last7DayHistory() async -> [DailyHealthSample] {
+        let cal = Calendar.current
+        let formatter = ISO8601DateFormatter()
+        formatter.formatOptions = [.withFullDate]
+        let sleepMap = await sleepHistory(days: 7)
+
+        var days: [DailyHealthSample] = []
+        for offset in stride(from: 6, through: 0, by: -1) {
+            let day = cal.date(byAdding: .day, value: -offset, to: Date())!
+            let start = cal.startOfDay(for: day)
+            let end = cal.date(byAdding: .day, value: 1, to: start)!
+            let steps = await querySum(.stepCount, unit: .count(), start: start, end: end)
+            let activeEnergy = await querySum(.activeEnergyBurned, unit: .kilocalorie(), start: start, end: end)
+
+            days.append(DailyHealthSample(
+                date: formatter.string(from: start),
+                sleep: sleepMap[start] ?? 0,
+                steps: steps,
+                activeEnergy: activeEnergy,
+                workoutMetGoal: activeEnergy >= 300
+            ))
+        }
+        return days
+    }
+
     // ── Helpers ─────────────────────────────────────────────────────────────────
+
+    private func sleepHistory(days: Int) async -> [Date: Double] {
+        let cal = Calendar.current
+        let end = Date()
+        let start = cal.startOfDay(for: cal.date(byAdding: .day, value: -(days - 1), to: end)!)
+        let finish = cal.date(byAdding: .day, value: 1, to: cal.startOfDay(for: end))!
+        let pred = HKQuery.predicateForSamples(withStart: start, end: finish)
+        let type = HKCategoryType(.sleepAnalysis)
+
+        return await withCheckedContinuation { cont in
+            let q = HKSampleQuery(sampleType: type, predicate: pred, limit: HKObjectQueryNoLimit,
+                                  sortDescriptors: nil) { _, samples, _ in
+                guard let samples = samples as? [HKCategorySample] else {
+                    cont.resume(returning: [:])
+                    return
+                }
+
+                var buckets: [Date: Double] = [:]
+                for sample in samples where
+                    sample.value == HKCategoryValueSleepAnalysis.asleepUnspecified.rawValue ||
+                    sample.value == HKCategoryValueSleepAnalysis.asleepCore.rawValue ||
+                    sample.value == HKCategoryValueSleepAnalysis.asleepDeep.rawValue ||
+                    sample.value == HKCategoryValueSleepAnalysis.asleepREM.rawValue {
+                    let bucket = cal.startOfDay(for: sample.endDate)
+                    guard bucket >= start, bucket < finish else { continue }
+                    buckets[bucket, default: 0] += sample.endDate.timeIntervalSince(sample.startDate) / 3600
+                }
+
+                cont.resume(returning: buckets)
+            }
+            self.store.execute(q)
+        }
+    }
 
     private func querySum(_ id: HKQuantityTypeIdentifier, unit: HKUnit,
                           days: Int) async -> Double {

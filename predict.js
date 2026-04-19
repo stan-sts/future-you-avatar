@@ -86,42 +86,41 @@
     };
   }
 
-  // Build a prompt describing the goal-state appearance for gpt-image-1.
-  // Visual changes come from the prompt — not CSS.
+  // Build a prompt describing the ACHIEVED goal state for gpt-image-1.
+  // Each habit that needs improvement contributes a positive visual outcome —
+  // showing what the person looks like after months of healthy living.
   function goalAvatarPrompt(habits, goalInfo) {
-    const visuals = [];
+    const improvements = [];
 
-    // Weight loss → face structure
-    if (goalInfo.kgToLose > 10) visuals.push('visibly leaner face, defined cheekbones, sharper jawline');
-    else if (goalInfo.kgToLose > 3) visuals.push('slightly leaner face, more defined jawline');
+    // Weight loss → structural face change
+    if (goalInfo.kgToLose > 10) improvements.push('visibly leaner face, defined cheekbones, sharper jawline');
+    else if (goalInfo.kgToLose > 3) improvements.push('slightly leaner face, more defined jawline');
 
-    // Sleep → eyes
-    if (habits.sleep < 6) visuals.push('bright alert eyes, no under-eye bags, no dark circles, well-rested');
-    else if (habits.sleep < 7.5) visuals.push('clear rested eyes, no puffiness');
+    // Sleep improvement → eyes and skin repair
+    if (habits.sleep < 7.5) improvements.push('no dark circles whatsoever, no under-eye bags, bright wide-awake eyes, well-rested glow');
 
-    // Hydration → skin
-    if (habits.water < 5) visuals.push('hydrated glowing skin, plump and radiant complexion');
+    // Hydration improvement → plump skin
+    if (habits.water < 7) improvements.push('deeply hydrated skin, plump radiant complexion, natural luminosity');
 
-    // Stress → expression
-    if (habits.stress > 6) visuals.push('smooth relaxed forehead, calm serene expression');
+    // Stress reduction → smooth face
+    if (habits.stress > 5) improvements.push('smooth relaxed forehead, no tension lines, calm serene expression');
 
-    // Smoking → skin tone
-    if (habits.smoking > 3) visuals.push('clear even skin tone, no yellowing or dullness');
+    // Quit or reduce smoking → skin clarity
+    if (habits.smoking > 0) improvements.push('clear even skin tone, no dullness or yellowing, healthier complexion');
 
-    // Alcohol → facial puffiness
-    if (habits.alcohol > 6) visuals.push('no facial redness, no puffiness, clean skin');
+    // Reduce alcohol → no puffiness
+    if (habits.alcohol > 3) improvements.push('no facial redness, no puffiness, clean defined features');
 
-    // Exercise → glow
-    if (habits.exercise < 3) visuals.push('healthy active glow, energetic appearance');
+    // Exercise → glow and vitality
+    if (habits.exercise < 4) improvements.push('healthy active glow, energetic vibrant look, fit appearance');
 
-    // Diet → skin clarity
-    if (habits.diet < 5) visuals.push('clear bright skin, healthy colour');
+    // Better diet → skin brightness
+    if (habits.diet < 7) improvements.push('clear bright skin, even healthy colour, smooth texture');
 
-    const desc = visuals.length
-      ? visuals.join(', ')
-      : 'healthy glowing skin, bright clear eyes, well-rested confident look';
+    const base = 'DSLR photograph of the exact same real person from the reference photo — identical clothing, identical body, full body head to toe, standing confidently on a plain white background';
+    const desc = improvements.length ? improvements.join(', ') : 'glowing luminous skin, bright captivating eyes, radiant well-rested look';
 
-    return `Realistic human bust portrait, ${desc}, natural neutral pose, photorealistic texture, plain light grey background, studio lighting, no exaggeration`;
+    return `${base}. This person looks: ${desc}, slightly more attractive version of themselves — sharper jawline, more defined facial features, better bone structure, confident glow — as if they have been living healthily for 6 months. High-end beauty photography — like a professional retouched magazine cover photo of a real human being. Skin looks real with natural texture, not smoothed into plastic. NO illustration, NO anime, NO cartoon, NO painting, NO 3D render, NO CGI, NO digital art. Must look like a real photograph of a real person, shot on Canon EOS R5, 85mm f/1.4, soft studio lighting.`;
   }
 
   global.Predictor = { predictBoth, healthScore, calculateWeightPlan, goalAvatarPrompt };

@@ -108,8 +108,9 @@ struct ContentView: View {
             async let exercise = hk.exerciseDaysPerWeek()
             async let water    = hk.avgWaterGlasses()
             async let hr       = hk.avgHeartRate()
+            async let history  = hk.last7DayHistory()
 
-            let (s, sl, ex, w, h) = await (steps, sleep, exercise, water, hr)
+            let (s, sl, ex, w, h, hist) = await (steps, sleep, exercise, water, hr, history)
 
             // Map avg HR to a 1-10 stress proxy (60 bpm → 3, 90 bpm → 8)
             let stressProxy = min(10, max(1, ((h - 50) / 5).rounded()))
@@ -122,7 +123,8 @@ struct ContentView: View {
                 diet:     5,   // no direct HealthKit equivalent
                 stress:   stressProxy,
                 smoking:  0,
-                alcohol:  0
+                alcohol:  0,
+                history:  HealthHistory(days: hist)
             )
 
             try await post(payload)
@@ -159,6 +161,11 @@ struct HealthPayload: Codable {
     var stress: Double
     var smoking: Double
     var alcohol: Double
+    var history: HealthHistory?
+}
+
+struct HealthHistory: Codable {
+    var days: [DailyHealthSample]
 }
 
 enum SyncStatus: Equatable {
