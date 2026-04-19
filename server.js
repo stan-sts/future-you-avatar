@@ -144,8 +144,11 @@ app.post('/api/generate-prompt', wrap(async (req, res) => {
 
   const data = await response.json();
   let raw = data.choices?.[0]?.message?.content?.trim() || '';
-  // Strip <think>...</think> reasoning blocks that K2 Think emits before the answer
-  const prompt = raw.replace(/<think>[\s\S]*?<\/think>/gi, '').trim();
+  // K2-Think emits a <think>...</think> block before the answer — extract what comes after it
+  const thinkEnd = raw.lastIndexOf('</think>');
+  const prompt = (thinkEnd >= 0 ? raw.slice(thinkEnd + 8) : raw)
+    .replace(/<think>[\s\S]*?<\/think>/gi, '')
+    .trim();
   if (!prompt) throw new Error('No prompt returned by K2 Think');
   console.log(`K2 prompt (${scenario}):`, prompt.slice(0, 150) + '…');
   res.json({ prompt });
@@ -284,7 +287,11 @@ Speak to me as Future Me.`;
 
   const data = await response.json();
   let raw = data.choices?.[0]?.message?.content?.trim() || '';
-  const message = raw.replace(/<think>[\s\S]*?<\/think>/gi, '').trim();
+  // K2-Think emits a <think>...</think> block before the answer — extract what comes after it
+  const thinkEnd = raw.lastIndexOf('</think>');
+  const message = (thinkEnd >= 0 ? raw.slice(thinkEnd + 8) : raw)
+    .replace(/<think>[\s\S]*?<\/think>/gi, '')
+    .trim();
   if (!message) throw new Error('No message returned by K2');
   res.json({ message });
 }));
