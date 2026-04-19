@@ -109,10 +109,11 @@ class HealthKitManager: ObservableObject {
         let cal = Calendar.current
         let formatter = ISO8601DateFormatter()
         formatter.formatOptions = [.withFullDate]
-        let sleepMap = await sleepHistory(days: 7)
-        let heartRateMap = await heartRateHistory(days: 7)
 
-        let samples: [(Date, Double, Double)] = await withTaskGroup(of: (Date, Double, Double).self) { group in
+        async let sleepMapTask = sleepHistory(days: 7)
+        async let heartRateMapTask = heartRateHistory(days: 7)
+
+        let samplesTask: [(Date, Double, Double)] = await withTaskGroup(of: (Date, Double, Double).self) { group in
             for offset in stride(from: 6, through: 0, by: -1) {
                 let day   = cal.date(byAdding: .day, value: -offset, to: Date())!
                 let start = cal.startOfDay(for: day)
@@ -128,7 +129,9 @@ class HealthKitManager: ObservableObject {
             return all.sorted { $0.0 < $1.0 }
         }
 
-        return samples.map { (start, steps, activeEnergy) in
+        let (sleepMap, heartRateMap) = await (sleepMapTask, heartRateMapTask)
+
+        return samplesTask.map { (start, steps, activeEnergy) in
             DailyHealthSample(
                 date: formatter.string(from: start),
                 sleep: sleepMap[start] ?? 0,

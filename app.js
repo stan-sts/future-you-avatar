@@ -273,7 +273,42 @@
   }
 
   function todayMetricSourceLabel(source) {
-    return source === "apple_health" ? "Apple Health" : source === "manual" ? "Manual entry" : "Waiting";
+    return source === "slider_override"
+      ? "Slider override"
+      : source === "apple_health"
+        ? "Apple Health"
+        : source === "manual"
+          ? "Manual entry"
+          : "Waiting";
+  }
+
+  function currentSliderOverrides() {
+    const sleep = parseOptionalNumber($("#sleep")?.value);
+    const steps = parseOptionalNumber($("#steps")?.value);
+
+    return {
+      sleep,
+      steps,
+    };
+  }
+
+  function applySliderOverridesToSyncedDay(day) {
+    if (!day) return null;
+
+    const overrides = currentSliderOverrides();
+    const next = { ...day };
+
+    if (overrides.sleep != null) {
+      next.sleep = overrides.sleep;
+      next.sleepMetGoal = overrides.sleep >= HEALTH_GOALS.sleep;
+    }
+
+    if (overrides.steps != null) {
+      next.steps = overrides.steps;
+      next.stepsMetGoal = overrides.steps >= HEALTH_GOALS.steps;
+    }
+
+    return next;
   }
 
   function heartRateDetail(metric) {
@@ -334,8 +369,12 @@
 
   function buildTodayProgressModel() {
     const syncedDay = syncedTodayDay();
+    const sliderOverrides = syncedDay ? currentSliderOverrides() : {};
     const manual = readTodayInputs();
     const pickMetric = (key) => {
+      if (syncedDay && sliderOverrides[key] != null) {
+        return { value: sliderOverrides[key], source: "slider_override" };
+      }
       if (syncedDay) {
         if (key !== "heartRate" || syncedDay.heartRateAvailable) {
           return { value: syncedDay[key], source: "apple_health" };
@@ -905,7 +944,11 @@ $("#connectWatch").addEventListener("click", () => {
   }
 
   function buildEvidenceModel() {
-    const days = syncedHistoryDays();
+    const rawDays = syncedHistoryDays();
+    const todayKey = isoDate(new Date());
+    const days = rawDays.map((day) =>
+      day.date === todayKey ? applySliderOverridesToSyncedDay(day) : day
+    );
     if (!days.length) {
       return {
         mode: "missing",
@@ -1080,7 +1123,7 @@ $("#connectWatch").addEventListener("click", () => {
       ? `Weight target still needs ${round1(state.goals.currentWeight - state.goals.targetWeight)} kg of progress across ${state.goals.months} months.`
       : `Weight target is set for maintenance over ${state.goals.months} months.`;
     const modeCopy = evidence.mode === "observed"
-      ? "Observed from Apple Health. A day only counts when the synced watch data clears the target."
+      ? "Observed from Apple Health, with the current baseline sliders overriding overlapping metrics like sleep or steps when you adjust them."
       : "This board now stays empty until real Apple Health history is synced, so streaks are never inferred from sliders.";
 
     if (evidence.mode === "missing") {

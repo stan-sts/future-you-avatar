@@ -74,7 +74,7 @@ struct ContentView: View {
                 .foregroundStyle(.blue.gradient)
             Text("Apple Health → Future You")
                 .font(.headline)
-            Text("Reads your last 7 days, adds screen time + reminders, and sends it to the web app.")
+            Text("Reads your last 7 days and sends your health summary to the web app.")
                 .font(.caption)
                 .foregroundStyle(.secondary)
                 .multilineTextAlignment(.center)
@@ -96,7 +96,7 @@ struct ContentView: View {
                     }
                 }
 
-                Text("Apple’s Screen Time frameworks use the Family Controls entitlement, so this demo tracks screen time manually for now.")
+                Text("This estimate feeds the web projection sync.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
@@ -332,15 +332,7 @@ struct ContentView: View {
             trigger: trigger
         )
 
-        try await withCheckedThrowingContinuation { continuation in
-            center.add(request) { error in
-                if let error {
-                    continuation.resume(throwing: error)
-                } else {
-                    continuation.resume(returning: ())
-                }
-            }
-        }
+        try await center.add(request)
     }
 
     func removeReminder() async {
