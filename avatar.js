@@ -1,4 +1,3 @@
-// Browser-native "avatar speaks" using the Web Speech API.
 // Picks a reasonable voice per scenario and animates the image while speaking.
 
 (function (global) {
